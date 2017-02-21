@@ -1,4 +1,0 @@
-﻿  VK_Renderer.cpp
-c:\users\ymike\desktop\vulkan\vulkanrenderer\vulkanrenderer\vulkanrenderer\vk_renderer.cpp(62): warning C4018: '<': signed/unsigned mismatch
-  VulkanRenderer.vcxproj -> C:\Users\ymike\Desktop\Vulkan\VulkanRenderer\VulkanRenderer\Debug\VulkanRenderer.exe
-  VulkanRenderer.vcxproj -> C:\Users\ymike\Desktop\Vulkan\VulkanRenderer\VulkanRenderer\Debug\VulkanRenderer.pdb (Partial PDB)
