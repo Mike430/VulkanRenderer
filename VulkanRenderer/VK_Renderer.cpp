@@ -60,37 +60,36 @@ VkResult VK_Renderer::Vk_RendererInit()
 			{
 				cout << _mPhysicalDevices.size() << " Physical Device(s) have been found on this system." << endl;
 
-				VkPhysicalDeviceProperties* physicalDeviceProperties = new VkPhysicalDeviceProperties();
-				VkPhysicalDeviceProperties* temp_PhysicalDeviceProperties = new VkPhysicalDeviceProperties();
-				uint32_t queueCount = 0;
+				VkPhysicalDeviceProperties physicalDeviceProperties = VkPhysicalDeviceProperties();
+				VkPhysicalDeviceProperties temp_PhysicalDeviceProperties = VkPhysicalDeviceProperties();
 				int winningIndex = 0;
 
 				for(int i = 0; i < _mPhysicalDevices.size(); i++)
 				{
-					vkGetPhysicalDeviceProperties(_mPhysicalDevices.at(i), temp_PhysicalDeviceProperties);
+					vkGetPhysicalDeviceProperties(_mPhysicalDevices.at(i), &temp_PhysicalDeviceProperties);
 
 					cout << i << "\nVkHandle\t" << _mPhysicalDevices.at(i) <<
-						"\nDevice name:\t" << temp_PhysicalDeviceProperties->deviceName <<
-						"\nDevice type:\t" << temp_PhysicalDeviceProperties->deviceType << // typedef enum VKPhysicalDeviceType {0-4} - 2 = intergrated GPU
-						"\nDevice cpty:\t" << temp_PhysicalDeviceProperties->limits.maxMemoryAllocationCount << endl;
+						"\nDevice name:\t" << temp_PhysicalDeviceProperties.deviceName <<
+						"\nDevice type:\t" << temp_PhysicalDeviceProperties.deviceType << // typedef enum VKPhysicalDeviceType {0-4} - 2 = intergrated GPU
+						"\nDevice cpty:\t" << temp_PhysicalDeviceProperties.limits.maxMemoryAllocationCount << endl;
 
-					if ((physicalDeviceProperties->deviceName == "" ||
-						physicalDeviceProperties->limits.maxMemoryAllocationCount < temp_PhysicalDeviceProperties->limits.maxMemoryAllocationCount) &&
-						temp_PhysicalDeviceProperties->deviceType == 2)
+					if ((physicalDeviceProperties.deviceName == "" ||
+						physicalDeviceProperties.limits.maxMemoryAllocationCount < temp_PhysicalDeviceProperties.limits.maxMemoryAllocationCount) &&
+						temp_PhysicalDeviceProperties.deviceType == 2)
 					{
 						physicalDeviceProperties = temp_PhysicalDeviceProperties;
 						winningIndex = i;
 					}
 				}
 
-				if (physicalDeviceProperties->deviceName == "")
+				if (physicalDeviceProperties.deviceName == "")
 				{
 					cout << "\nNo intergrated GPU device was found, exiting." << endl;
 					return VK_ERROR_INITIALIZATION_FAILED;
 				}
 
 				_mGraphicsCard = _mPhysicalDevices.at(winningIndex);
-				cout << "\nWe're using the " << physicalDeviceProperties->deviceName << " for graphics\n" << endl;
+				cout << "\nWe're using the " << physicalDeviceProperties.deviceName << " for graphics\n" << endl;
 
 				//returnResult = vkCreateDevice(_mGraphicsCard, );
 			}
