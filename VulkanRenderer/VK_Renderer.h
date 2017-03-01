@@ -11,13 +11,15 @@ class VK_Renderer
 {
 private:
 	VkApplicationInfo					_mAppInfo;
-	VkInstanceCreateInfo				_mCreateInfo;
-	//const VkAllocationCallbacks		_mAllocator;
+	VkInstanceCreateInfo				_mInstanceCreateInfo;
+	//const VkAllocationCallbacks			_mAllocator;
+
 	VkInstance							_mVkInstance; // Used to track hardware's state (One instance can have many physical devices)
 	VkPhysicalDevice					_mGraphicsCard; // of the potentially many devices, this renderer will only utilize one
 	std::vector<VkPhysicalDevice>		_mPhysicalDevices; // Every device in the system Vulkan can put a handle on
+	VkDevice							_mLogicalDevice;
 
-	VkResult Vk_RendererInit();
+	VkResult VkInit();
 public:
 	VK_Renderer();
 	~VK_Renderer();

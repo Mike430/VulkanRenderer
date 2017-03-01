@@ -4,7 +4,7 @@
 VK_Renderer::VK_Renderer()
 {
 	cout << "VK_Renderer constructor called" << endl;
-	if (Vk_RendererInit() == VK_SUCCESS)
+	if (VkInit() == VK_SUCCESS)
 	{
 		cout << "VK_Renderer constructor complete" << endl;
 	}
@@ -27,22 +27,22 @@ VK_Renderer::~VK_Renderer()
 }
 
 
-VkResult VK_Renderer::Vk_RendererInit()
+VkResult VK_Renderer::VkInit()
 {
 	VkResult returnResult = VK_SUCCESS;
 
 	_mAppInfo = {}; // information about your application and Vulkan compatibility
-	_mCreateInfo = {}; // informations about the specific type of Vulkan instance you wish to create
+	_mInstanceCreateInfo = {}; // informations about the specific type of Vulkan instance you wish to create
 
 	_mAppInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	_mAppInfo.pApplicationName = "Blank Vulkan Window";
 	_mAppInfo.engineVersion = 1;
 	_mAppInfo.apiVersion = VK_MAKE_VERSION(1, 0, 0);
 
-	_mCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	_mCreateInfo.pApplicationInfo = &_mAppInfo;
+	_mInstanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	_mInstanceCreateInfo.pApplicationInfo = &_mAppInfo;
 
-	returnResult = vkCreateInstance(&_mCreateInfo, nullptr, &_mVkInstance);
+	returnResult = vkCreateInstance(&_mInstanceCreateInfo, nullptr, &_mVkInstance);
 
 	if (returnResult == VK_SUCCESS)
 	{
@@ -58,40 +58,68 @@ VkResult VK_Renderer::Vk_RendererInit()
 
 			if (returnResult == VK_SUCCESS)
 			{
-				cout << _mPhysicalDevices.size() << " Physical Device(s) have been found on this system." << endl;
-
-				VkPhysicalDeviceProperties physicalDeviceProperties = VkPhysicalDeviceProperties();
-				VkPhysicalDeviceProperties temp_PhysicalDeviceProperties = VkPhysicalDeviceProperties();
-				int winningIndex = 0;
-
-				for(int i = 0; i < _mPhysicalDevices.size(); i++)
+				// #####################################################################################################
+				// At this point we know that we can initialise Vulkan, now we need to know if it can be initialised
+				// to a descrete GPU. This next section of code finds and sets _mGraphicsCard if a suitable 
+				// PhysicalDevice is identified. If more than one qualify, it chooses the one with the most V-RAM
+				// #####################################################################################################
 				{
-					vkGetPhysicalDeviceProperties(_mPhysicalDevices.at(i), &temp_PhysicalDeviceProperties);
+					cout << _mPhysicalDevices.size() << " Physical Device(s) have been found on this system." << endl;
 
-					cout << i << "\nVkHandle\t" << _mPhysicalDevices.at(i) <<
-						"\nDevice name:\t" << temp_PhysicalDeviceProperties.deviceName <<
-						"\nDevice type:\t" << temp_PhysicalDeviceProperties.deviceType << // typedef enum VKPhysicalDeviceType {0-4} - 2 = intergrated GPU
-						"\nDevice cpty:\t" << temp_PhysicalDeviceProperties.limits.maxMemoryAllocationCount << endl;
+					VkPhysicalDeviceProperties physicalDeviceProperties = VkPhysicalDeviceProperties();
+					VkPhysicalDeviceProperties temp_PhysicalDeviceProperties = VkPhysicalDeviceProperties();
+					int winningIndex = 0;
 
-					if ((physicalDeviceProperties.deviceName == "" ||
-						physicalDeviceProperties.limits.maxMemoryAllocationCount < temp_PhysicalDeviceProperties.limits.maxMemoryAllocationCount) &&
-						temp_PhysicalDeviceProperties.deviceType == 2)
+					for (int i = 0; i < _mPhysicalDevices.size(); i++)
 					{
-						physicalDeviceProperties = temp_PhysicalDeviceProperties;
-						winningIndex = i;
+						vkGetPhysicalDeviceProperties(_mPhysicalDevices.at(i), &temp_PhysicalDeviceProperties);
+
+						cout << i << "\nVkHandle\t" << _mPhysicalDevices.at(i) <<
+							"\nDevice name:\t" << temp_PhysicalDeviceProperties.deviceName <<
+							"\nDevice type:\t" << temp_PhysicalDeviceProperties.deviceType << // typedef enum VKPhysicalDeviceType {0-4} - 2 = Descrete GPU
+							"\nDevice cpty:\t" << temp_PhysicalDeviceProperties.limits.maxMemoryAllocationCount << endl;
+
+						if ((physicalDeviceProperties.deviceName == "" ||
+							physicalDeviceProperties.limits.maxMemoryAllocationCount < temp_PhysicalDeviceProperties.limits.maxMemoryAllocationCount) &&
+							temp_PhysicalDeviceProperties.deviceType == 2)
+						{
+							physicalDeviceProperties = temp_PhysicalDeviceProperties;
+							winningIndex = i;
+						}
 					}
-				}
 
-				if (physicalDeviceProperties.deviceName == "")
+					if (physicalDeviceProperties.deviceName == "")
+					{
+						cout << "\nNo intergrated GPU device was found, exiting." << endl;
+						return VK_ERROR_INITIALIZATION_FAILED;
+					}
+
+					_mGraphicsCard = _mPhysicalDevices.at(winningIndex);
+					cout << "\nWe're using the " << physicalDeviceProperties.deviceName << " for graphics\n" << endl;
+				}
+				// #####################################################################################################
+				// We have a GPU, now we can focus on initialising it with a logical Device.
+				// #####################################################################################################
 				{
-					cout << "\nNo intergrated GPU device was found, exiting." << endl;
-					return VK_ERROR_INITIALIZATION_FAILED;
+					VkPhysicalDeviceFeatures supportedFeatures;
+					VkPhysicalDeviceFeatures requiredFeatures = {};
+					vkGetPhysicalDeviceFeatures(_mGraphicsCard, &supportedFeatures);
+
+					requiredFeatures.multiDrawIndirect = supportedFeatures.multiDrawIndirect;
+					requiredFeatures.tessellationShader = VK_TRUE;
+					requiredFeatures.geometryShader = VK_TRUE;
+					
+					const VkDeviceQueueCreateInfo deviceQueueCreateInfo = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,	nullptr, 0, 0, 1, nullptr };
+
+					const VkDeviceCreateInfo deviceCreateInfo = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, nullptr, 0, 1,	&deviceQueueCreateInfo,
+						0, nullptr,	0, nullptr,&requiredFeatures };
+
+					returnResult = vkCreateDevice(_mGraphicsCard, &deviceCreateInfo, nullptr, &_mLogicalDevice);
+
+					returnResult == VK_SUCCESS ? cout << "It worked\n\n" : cout << "It did not work\n\n";
+
+					return returnResult;
 				}
-
-				_mGraphicsCard = _mPhysicalDevices.at(winningIndex);
-				cout << "\nWe're using the " << physicalDeviceProperties.deviceName << " for graphics\n" << endl;
-
-				//returnResult = vkCreateDevice(_mGraphicsCard, );
 			}
 		}
 	}
