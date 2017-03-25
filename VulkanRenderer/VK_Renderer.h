@@ -20,6 +20,9 @@ private:
 	VkDevice							_mLogicalDevice;
 
 	VkResult VkInit();
+	VkResult A_VkValidateSystem();
+	VkResult B_VkChoosePhysiccalDevice();
+	VkResult C_VkInitLogicalDevice();
 public:
 	VK_Renderer();
 	~VK_Renderer();
