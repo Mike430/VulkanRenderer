@@ -1,5 +1,0 @@
-﻿  VK_Renderer.cpp
-c:\users\ymike\desktop\vulkan\vulkanrenderer\vulkanrenderer\vulkanrenderer\vk_renderer.h(4): fatal error C1083: Cannot open include file: 'vulkan.h': No such file or directory
-  Main.cpp
-c:\users\ymike\desktop\vulkan\vulkanrenderer\vulkanrenderer\vulkanrenderer\vk_renderer.h(4): fatal error C1083: Cannot open include file: 'vulkan.h': No such file or directory
-  Generating Code...

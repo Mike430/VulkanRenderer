@@ -1,30 +1,43 @@
 #pragma once
-#include <iostream>
-#include <vector>
+// Project dependencies
+#define GLFW_INCLUDE_VULKAN
 #include "vulkan.h"
+#include "GLFW/glfw3.h"
 
-#pragma comment (lib, "vulkan-1.lib")
+// Other dependencies
+#include <iostream>
+#include <string>
+#include <vector>
 
+// namespaces
 using namespace std;
 
 class VK_Renderer
 {
 private:
-	VkApplicationInfo					_mAppInfo;
-	VkInstanceCreateInfo				_mInstanceCreateInfo;
-	//const VkAllocationCallbacks			_mAllocator;
+	// Vulkan variables
+	VkApplicationInfo							_mAppInfo;
+	VkInstanceCreateInfo						_mInstanceCreateInfo;
 
-	VkInstance							_mVkInstance; // Used to track hardware's state (One instance can have many physical devices)
-	VkPhysicalDevice					_mGraphicsCard; // of the potentially many devices, this renderer will only utilize one
-	std::vector<VkPhysicalDevice>		_mPhysicalDevices; // Every device in the system Vulkan can put a handle on
-	VkDevice							_mLogicalDevice;
+	//GLFW Variables
+	GLFWwindow*									_mWindow;
 
-	VkResult VkInit();
-	VkResult A_VkValidateSystem();
-	VkResult B_VkChoosePhysiccalDevice();
-	VkResult C_VkInitLogicalDevice();
+	VkInstance									_mVkInstance;		// Used to track hardware's state (One instance can have many physical devices)
+	VkPhysicalDevice							_mGraphicsCard;		// Of the potentially many devices, this renderer will only utilize one
+	vector<VkPhysicalDevice>					_mPhysicalDevices;	// Every device in the system Vulkan can put a handle on
+	VkDevice									_mLogicalDevice;	// Abstraction of the hardware
+	VkSurfaceKHR								_mWindowSurface;	// The window "Surface" Vulkan will be drawing onto
+
+	VkResult									initVulkanGraphicsPipeline();
+	VkResult									initInstance();
+	VkResult									chooseAPhysicalDevice();
+	VkResult									initPhysicalDevice();
+	VkResult									initLogicalDevice();
+
+	void										CreateVulkanWindowSurface();
 public:
 	VK_Renderer();
 	~VK_Renderer();
-};
 
+	void										GameLoop();
+};
