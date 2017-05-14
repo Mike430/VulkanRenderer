@@ -4,9 +4,14 @@
 int main()
 {
 	VK_Renderer* vkRenderer = new VK_Renderer();
-	vkRenderer->GameLoop();
+	
+	if( vkRenderer->isCorrectlyInitialised == true )
+	{
+		vkRenderer->GameLoop();
+	}
 	delete vkRenderer;
 	vkRenderer = nullptr;
+
 	system( "pause" );
 	return 0;
 }

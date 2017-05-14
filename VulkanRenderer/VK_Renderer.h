@@ -1,13 +1,21 @@
 #pragma once
 // Project dependencies
 #define GLFW_INCLUDE_VULKAN
-#include "vulkan.h"
+
+#if defined(_WIN32)
+#define VK_USE_PLATFORM_WIN32_KHR
+#endif
+
+
+#include "vulkan/vulkan.h"
 #include "GLFW/glfw3.h"
 
 // Other dependencies
 #include <iostream>
 #include <string>
 #include <vector>
+#include <stdio.h>
+#include <string.h>
 
 // namespaces
 using namespace std;
@@ -15,11 +23,16 @@ using namespace std;
 class VK_Renderer
 {
 private:
+	vector<const char*>							_mWantedInstanceExtensions;
+	vector<const char*>							_mWantedDeviceExtensions;
+	vector<const char*>							_mTurnedOnInstanceExtensions;
+	vector<const char*>							_mTurnedOnDeviceExtensions;
+
 	// Vulkan variables
 	VkApplicationInfo							_mAppInfo;
 	VkInstanceCreateInfo						_mInstanceCreateInfo;
 
-	//GLFW Variables
+	// GLFW Variables
 	GLFWwindow*									_mWindow;
 
 	VkInstance									_mVkInstance;		// Used to track hardware's state (One instance can have many physical devices)
@@ -39,5 +52,6 @@ public:
 	VK_Renderer();
 	~VK_Renderer();
 
+	bool										isCorrectlyInitialised;
 	void										GameLoop();
 };

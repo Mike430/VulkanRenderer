@@ -5,13 +5,29 @@
 VK_Renderer::VK_Renderer()
 {
 	cout << "VK_Renderer constructor called" << endl;
+
+	// Declare a lists of all extensions we want to feed into our Vulkan Instance and Device
+	_mWantedInstanceExtensions.push_back( VK_KHR_SURFACE_EXTENSION_NAME );
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+	_mWantedInstanceExtensions.push_back( VK_KHR_WIN32_SURFACE_EXTENSION_NAME );
+#endif
+
+	_mWantedDeviceExtensions.push_back( "VK_KHR_swapchain" );
+	_mWantedDeviceExtensions.push_back( "VK_KHR_shader_draw_parameters" );
+	_mWantedDeviceExtensions.push_back( "VK_NV_glsl_shader" );
+	_mWantedDeviceExtensions.push_back(	"VK_NV_viewport_swizzle" );
+	_mWantedDeviceExtensions.push_back( "VK_NV_geometry_shader_passthrough" );
+
+
 	if( initVulkanGraphicsPipeline() == VK_SUCCESS )
 	{
 		cout << "VK_Renderer constructor complete" << endl;
+		isCorrectlyInitialised = true;
 	}
 	else
 	{
 		cout << "VK_Renderer constructor failed" << endl;
+		isCorrectlyInitialised = false;
 	}
 }
 
@@ -19,13 +35,14 @@ VK_Renderer::VK_Renderer()
 VK_Renderer::~VK_Renderer()
 {
 	cout << "VK_Renderer destructor called" << endl;
-	
+
 	// Shutdown GLFW first
 	glfwTerminate(); // window delete cannot be done before glfwTerminate as glfwTerminate cleans windows
 	glfwDestroyWindow( _mWindow ); // Can use delete because terminate alters all windows
-	
+
 	// Shutdown Vulkan next
 	vkDestroySurfaceKHR( _mVkInstance, _mWindowSurface, nullptr );
+	vkDestroyDevice( _mLogicalDevice, nullptr );
 	vkDestroyInstance( _mVkInstance, nullptr );
 
 	cout << "VK_Renderer destructor completed" << endl;
@@ -75,8 +92,37 @@ VkResult VK_Renderer::initInstance()
 	_mAppInfo.engineVersion = 1;
 	_mAppInfo.apiVersion = VK_MAKE_VERSION( 1, 0, 0 );
 
+
+	uint32_t extensionCount;
+	uint32_t finalExtensionCount = 0;
+	vector<VkExtensionProperties> vkInstanceExtensionProps;
+	vkEnumerateInstanceExtensionProperties( nullptr, &extensionCount, nullptr );
+	cout << "We have " << extensionCount << " extensions available to the instance. They are:" << endl;
+	vkInstanceExtensionProps.resize( extensionCount );
+	vkEnumerateInstanceExtensionProperties( nullptr, &extensionCount, vkInstanceExtensionProps.data() );
+	
+	for( int i = 0; i < vkInstanceExtensionProps.size(); i++ )
+	{
+		bool enabled = false;
+		for( int j = 0; j < _mWantedInstanceExtensions.size(); j++ )
+		{
+			if( strcmp( _mWantedInstanceExtensions.at( j ), vkInstanceExtensionProps.at( i ).extensionName ) == 0 )
+			{
+				_mTurnedOnInstanceExtensions.push_back( _mWantedInstanceExtensions.at( j ) );
+				finalExtensionCount++;
+				enabled = true;
+				continue;
+			}
+		}
+		enabled ? cout << "enabled - " : cout << "dissabled - ";
+		cout << vkInstanceExtensionProps.at( i ).extensionName << endl;
+	}
+
+
 	_mInstanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	_mInstanceCreateInfo.pApplicationInfo = &_mAppInfo;
+	_mInstanceCreateInfo.enabledExtensionCount = finalExtensionCount;
+	_mInstanceCreateInfo.ppEnabledExtensionNames = _mTurnedOnInstanceExtensions.data();
 
 	returnResult = vkCreateInstance( &_mInstanceCreateInfo,
 									 nullptr,
@@ -183,10 +229,43 @@ VkResult VK_Renderer::initLogicalDevice()
 	requiredFeatures.tessellationShader = VK_TRUE;
 	requiredFeatures.geometryShader = VK_TRUE;
 
+
 	const VkDeviceQueueCreateInfo deviceQueueCreateInfo = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,	nullptr, 0, 0, 1, nullptr };
 
-	const VkDeviceCreateInfo deviceCreateInfo = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, nullptr, 0, 1,	&deviceQueueCreateInfo,
-		0, nullptr,	0, nullptr,&requiredFeatures };
+	VkDeviceCreateInfo deviceCreateInfo = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, nullptr, 0, 1, &deviceQueueCreateInfo,
+		0, nullptr,	0, nullptr, &requiredFeatures };
+
+
+	uint32_t extensionCount;
+	uint32_t finalExtensionCount = 0;
+	vector<VkExtensionProperties> vkDeviceExtensionProps;
+	vkEnumerateDeviceExtensionProperties( _mGraphicsCard, nullptr, &extensionCount, nullptr );
+	cout << "We have " << extensionCount << " extensions on the chosen graphics card. They are:" << endl;
+	vkDeviceExtensionProps.resize( extensionCount );
+	vkEnumerateDeviceExtensionProperties( _mGraphicsCard, nullptr, &extensionCount, vkDeviceExtensionProps.data() );
+	
+	for( int i = 0; i < vkDeviceExtensionProps.size(); i++ )
+	{
+		bool enabled = false;
+		for( int j = 0; j < _mWantedDeviceExtensions.size(); j++ )
+		{
+			if( strcmp( _mWantedDeviceExtensions.at( j ), vkDeviceExtensionProps.at( i ).extensionName ) == 0 )
+			{
+				_mTurnedOnDeviceExtensions.push_back( _mWantedDeviceExtensions.at( j ) );
+				finalExtensionCount++;
+				enabled = true;
+				continue;
+			}
+		}
+		enabled ? cout << "enabled - " : cout << "dissabled - ";
+		cout << vkDeviceExtensionProps.at( i ).extensionName << endl;
+	}
+	
+
+	deviceCreateInfo.enabledExtensionCount = finalExtensionCount;
+	deviceCreateInfo.ppEnabledExtensionNames = _mTurnedOnDeviceExtensions.data();
+
+
 
 	returnResult = vkCreateDevice( _mGraphicsCard, &deviceCreateInfo, nullptr, &_mLogicalDevice );
 
@@ -204,9 +283,9 @@ void VK_Renderer::CreateVulkanWindowSurface()
 
 	// Creating a Vulkan window surface
 	VkResult returnResult = glfwCreateWindowSurface( _mVkInstance, _mWindow, NULL, &_mWindowSurface );
-	if( returnResult )
+	if( returnResult != VK_SUCCESS )
 	{
-		cout << "Could not create a window in which to draw." << endl;
+		cout << "Could not create a window in which to draw. VK_ERROR: " << returnResult << endl;
 	}
 
 	glfwMakeContextCurrent( _mWindow );

@@ -75,11 +75,11 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)Dependencies\Vulkan;$(ProjectDir)Dependencies\GLFW\x32\include</AdditionalIncludeDirectories>
-      <AdditionalUsingDirectories>$(ProjectDir)Dependencies\Vulkan;$(ProjectDir)Dependencies\GLFW\x32\include</AdditionalUsingDirectories>
+      <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include;$(VULKAN_SDK)\Third-Party\Include;$(ProjectDir)Dependencies\GLFW\x32\include</AdditionalIncludeDirectories>
+      <AdditionalUsingDirectories>$(VULKAN_SDK)\Include;$(VULKAN_SDK)\Third-Party\Include;$(ProjectDir)Dependencies\GLFW\x32\include</AdditionalUsingDirectories>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)Dependencies\Vulkan\x86;$(ProjectDir)Dependencies\GLFW\x32\lib-vc2015;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(VULKAN_SDK)\Lib32;$(VULKAN_SDK)\Third-Party\Bin32;$(ProjectDir)Dependencies\GLFW\x32\lib-vc2015;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;glfw3dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -88,11 +88,11 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)Dependencies\Vulkan;$(ProjectDir)Dependencies\GLFW\x64\include</AdditionalIncludeDirectories>
-      <AdditionalUsingDirectories>$(ProjectDir)Dependencies\Vulkan;$(ProjectDir)Dependencies\GLFW\x64\include</AdditionalUsingDirectories>
+      <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include;$(VULKAN_SDK)\Third-Party\Include;$(ProjectDir)Dependencies\GLFW\x64\include</AdditionalIncludeDirectories>
+      <AdditionalUsingDirectories>$(VULKAN_SDK)\Include;$(VULKAN_SDK)\Third-Party\Include;$(ProjectDir)Dependencies\GLFW\x64\include</AdditionalUsingDirectories>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)Dependencies\Vulkan\x64;$(ProjectDir)Dependencies\GLFW\lib-mingw-w64;$(ProjectDir)Dependencies\GLFW\x64\lib-vc2015;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(VULKAN_SDK)\Lib;$(VULKAN_SDK)\Third-Party\Bin;$(ProjectDir)Dependencies\GLFW\lib-mingw-w64;$(ProjectDir)Dependencies\GLFW\x64\lib-vc2015;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <Link>
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;glfw3dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -105,13 +105,13 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)Dependencies\Vulkan;$(ProjectDir)Dependencies\GLFW\x32\include</AdditionalIncludeDirectories>
-      <AdditionalUsingDirectories>$(ProjectDir)Dependencies\Vulkan;$(ProjectDir)Dependencies\GLFW\x32\include</AdditionalUsingDirectories>
+      <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include;$(VULKAN_SDK)\Third-Party\Include;$(ProjectDir)Dependencies\GLFW\x32\include</AdditionalIncludeDirectories>
+      <AdditionalUsingDirectories>$(VULKAN_SDK)\Include;$(VULKAN_SDK)\Third-Party\Include;$(ProjectDir)Dependencies\GLFW\x32\include</AdditionalUsingDirectories>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>$(ProjectDir)Dependencies\Vulkan\x86;$(ProjectDir)Dependencies\GLFW\x32\lib-vc2015;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(VULKAN_SDK)\Lib32;$(VULKAN_SDK)\Third-Party\Bin32;$(ProjectDir)Dependencies\GLFW\x32\lib-vc2015;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;glfw3dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -122,13 +122,13 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)Dependencies\Vulkan;$(ProjectDir)Dependencies\GLFW\x64\include</AdditionalIncludeDirectories>
-      <AdditionalUsingDirectories>$(ProjectDir)Dependencies\Vulkan;$(ProjectDir)Dependencies\GLFW\x64\include</AdditionalUsingDirectories>
+      <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include;$(VULKAN_SDK)\Third-Party\Include;$(ProjectDir)Dependencies\GLFW\x64\include</AdditionalIncludeDirectories>
+      <AdditionalUsingDirectories>$(VULKAN_SDK)\Include;$(VULKAN_SDK)\Third-Party\Include;$(ProjectDir)Dependencies\GLFW\x64\include</AdditionalUsingDirectories>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>$(ProjectDir)Dependencies\Vulkan\x64;$(ProjectDir)Dependencies\GLFW\lib-mingw-w64;$(ProjectDir)Dependencies\GLFW\x64\lib-vc2015;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(VULKAN_SDK)\Lib;$(VULKAN_SDK)\Third-Party\Bin;$(ProjectDir)Dependencies\GLFW\lib-mingw-w64;$(ProjectDir)Dependencies\GLFW\x64\lib-vc2015;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;glfw3dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
