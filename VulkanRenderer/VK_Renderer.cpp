@@ -8,7 +8,7 @@ VK_Renderer::VK_Renderer()
 
 	// Declare a lists of all extensions we want to feed into our Vulkan Instance and Device
 	_mWantedInstanceExtensions.push_back( VK_KHR_SURFACE_EXTENSION_NAME );
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(VK_USE_PLATFORM_WIN32_KHR) // won't stop x64 builds - it's up to vulkan weather it's used
 	_mWantedInstanceExtensions.push_back( VK_KHR_WIN32_SURFACE_EXTENSION_NAME );
 #endif
 
