@@ -35,16 +35,16 @@ private:
 	// GLFW Variables
 	GLFWwindow*									_mWindow;
 
-	VkInstance									_mVkInstance;		// Used to track hardware's state (One instance can have many physical devices)
-	VkPhysicalDevice							_mGraphicsCard;		// Of the potentially many devices, this renderer will only utilize one
-	vector<VkPhysicalDevice>					_mPhysicalDevices;	// Every device in the system Vulkan can put a handle on
-	VkDevice									_mLogicalDevice;	// Abstraction of the hardware
-	VkSurfaceKHR								_mWindowSurface;	// The window "Surface" Vulkan will be drawing onto
+	VkInstance									_mVkInstance;						// Used to track hardware's state (One instance can have many physical devices)
+	VkPhysicalDevice							_mPhysicalDevice;					// Of the potentially many devices, this renderer will only utilize one
+	vector<VkPhysicalDevice>					_mPhysicalDevices;					// Every device in the system Vulkan can put a handle on
+	VkDevice									_mLogicalDevice;					// Abstraction of the hardware
+	VkQueue										_mGraphicsQueue;					// The handle through which we'll send graphical instructions
+	VkSurfaceKHR								_mWindowSurface;					// The window "Surface" Vulkan will be drawing onto
 
 	VkResult									initVulkanGraphicsPipeline();
 	VkResult									initInstance();
 	VkResult									chooseAPhysicalDevice();
-	VkResult									initPhysicalDevice();
 	VkResult									initLogicalDevice();
 
 	void										CreateVulkanWindowSurface();

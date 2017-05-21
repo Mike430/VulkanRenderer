@@ -15,7 +15,7 @@ VK_Renderer::VK_Renderer()
 	_mWantedDeviceExtensions.push_back( "VK_KHR_swapchain" );
 	_mWantedDeviceExtensions.push_back( "VK_KHR_shader_draw_parameters" );
 	_mWantedDeviceExtensions.push_back( "VK_NV_glsl_shader" );
-	_mWantedDeviceExtensions.push_back(	"VK_NV_viewport_swizzle" );
+	_mWantedDeviceExtensions.push_back( "VK_NV_viewport_swizzle" );
 	_mWantedDeviceExtensions.push_back( "VK_NV_geometry_shader_passthrough" );
 
 
@@ -57,7 +57,6 @@ VkResult VK_Renderer::initVulkanGraphicsPipeline()
 	// https://vulkan.lunarg.com/doc/sdk/1.0.46.0/windows/samples_index.html
 	if( VK_SUCCESS != ( returnResult = initInstance() ) )				return returnResult;
 	if( VK_SUCCESS != ( returnResult = chooseAPhysicalDevice() ) )		return returnResult;
-	if( VK_SUCCESS != ( returnResult = initPhysicalDevice() ) )			return returnResult;
 	if( VK_SUCCESS != ( returnResult = initLogicalDevice() ) )			return returnResult;
 
 	if( !glfwInit() )
@@ -95,12 +94,11 @@ VkResult VK_Renderer::initInstance()
 
 	uint32_t extensionCount;
 	uint32_t finalExtensionCount = 0;
-	vector<VkExtensionProperties> vkInstanceExtensionProps;
 	vkEnumerateInstanceExtensionProperties( nullptr, &extensionCount, nullptr );
 	cout << "We have " << extensionCount << " extensions available to the instance. They are:" << endl;
-	vkInstanceExtensionProps.resize( extensionCount );
+	vector<VkExtensionProperties> vkInstanceExtensionProps( extensionCount );
 	vkEnumerateInstanceExtensionProperties( nullptr, &extensionCount, vkInstanceExtensionProps.data() );
-	
+
 	for( int i = 0; i < vkInstanceExtensionProps.size(); i++ )
 	{
 		bool enabled = false;
@@ -184,36 +182,9 @@ VkResult VK_Renderer::chooseAPhysicalDevice()
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
 
-	_mGraphicsCard = _mPhysicalDevices.at( winningIndex );
+	_mPhysicalDevice = _mPhysicalDevices.at( winningIndex );
 	cout << "\nWe're using the " << physicalDeviceProperties.deviceName << " for graphics\n" << endl;
 	return VK_SUCCESS;
-}
-
-
-VkResult VK_Renderer::initPhysicalDevice()
-{
-	VkResult returnResult = VK_SUCCESS;
-
-	uint32_t numDeviceLayers = 0;
-	vector<VkLayerProperties> deviceLayerProperties;
-
-	vkEnumerateDeviceLayerProperties( _mGraphicsCard,
-									  &numDeviceLayers,
-									  nullptr );
-	if( numDeviceLayers > 0 )
-	{
-		deviceLayerProperties.resize( numDeviceLayers );
-		vkEnumerateDeviceLayerProperties( _mGraphicsCard,
-										  &numDeviceLayers,
-										  deviceLayerProperties.data() );
-		cout << "We have " << numDeviceLayers << " Layers" << endl;
-		// I have VK_LAYER_NV_optimus
-		// But no VK_LAYER_LUNARG_swapchain - Scratches head
-		return VK_SUCCESS;
-	}
-
-	cout << "Missing approapriate Vulkan Layers for graphical functionality" << endl;
-	return VK_ERROR_INITIALIZATION_FAILED;
 }
 
 
@@ -223,27 +194,54 @@ VkResult VK_Renderer::initLogicalDevice()
 
 	VkPhysicalDeviceFeatures supportedFeatures;
 	VkPhysicalDeviceFeatures requiredFeatures = {};
-	vkGetPhysicalDeviceFeatures( _mGraphicsCard, &supportedFeatures );
+	vkGetPhysicalDeviceFeatures( _mPhysicalDevice, &supportedFeatures );
 
 	requiredFeatures.multiDrawIndirect = supportedFeatures.multiDrawIndirect;
 	requiredFeatures.tessellationShader = VK_TRUE;
 	requiredFeatures.geometryShader = VK_TRUE;
 
 
-	const VkDeviceQueueCreateInfo deviceQueueCreateInfo = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,	nullptr, 0, 0, 1, nullptr };
+	uint32_t queueFamilyCount;
+	vkGetPhysicalDeviceQueueFamilyProperties( _mPhysicalDevice, &queueFamilyCount, nullptr );
+	vector<VkQueueFamilyProperties> familyProperties( queueFamilyCount );
+	vkGetPhysicalDeviceQueueFamilyProperties( _mPhysicalDevice, &queueFamilyCount, familyProperties.data() );
+	int graphicsQueueFamilyIndex = 0;
 
-	VkDeviceCreateInfo deviceCreateInfo = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, nullptr, 0, 1, &deviceQueueCreateInfo,
-		0, nullptr,	0, nullptr, &requiredFeatures };
+	for( int i = 0; i < queueFamilyCount; i++ )
+	{
+		cout << VK_QUEUE_GRAPHICS_BIT << " - " << familyProperties.at( i ).queueFlags;
+
+		if( VK_QUEUE_GRAPHICS_BIT & familyProperties.at( i ).queueFlags )
+		{
+			cout << " : This is the graphics queue." << endl;
+			graphicsQueueFamilyIndex = i;
+		}
+		else
+		{
+			cout << " : This isn't the graphics queue." << endl;
+		}
+	}
+
+	float queuePriorities[] = { 1.0f };
+
+	VkDeviceQueueCreateInfo deviceQueueCreateInfo;
+	deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	deviceQueueCreateInfo.pNext = nullptr;
+	deviceQueueCreateInfo.flags = 0;
+	deviceQueueCreateInfo.queueFamilyIndex = graphicsQueueFamilyIndex;
+	deviceQueueCreateInfo.queueCount = 1;
+	deviceQueueCreateInfo.pQueuePriorities = queuePriorities;
 
 
+	// Get the available extensions
 	uint32_t extensionCount;
 	uint32_t finalExtensionCount = 0;
-	vector<VkExtensionProperties> vkDeviceExtensionProps;
-	vkEnumerateDeviceExtensionProperties( _mGraphicsCard, nullptr, &extensionCount, nullptr );
-	cout << "We have " << extensionCount << " extensions on the chosen graphics card. They are:" << endl;
-	vkDeviceExtensionProps.resize( extensionCount );
-	vkEnumerateDeviceExtensionProperties( _mGraphicsCard, nullptr, &extensionCount, vkDeviceExtensionProps.data() );
-	
+	vkEnumerateDeviceExtensionProperties( _mPhysicalDevice, nullptr, &extensionCount, nullptr );
+	cout << endl << "We have " << extensionCount << " extensions on the chosen graphics card. They are:" << endl;
+	vector<VkExtensionProperties> vkDeviceExtensionProps( extensionCount );
+	vkEnumerateDeviceExtensionProperties( _mPhysicalDevice, nullptr, &extensionCount, vkDeviceExtensionProps.data() );
+
+	// If the extensions we want exist, add them to the vector we'll use for enabling them
 	for( int i = 0; i < vkDeviceExtensionProps.size(); i++ )
 	{
 		bool enabled = false;
@@ -260,16 +258,27 @@ VkResult VK_Renderer::initLogicalDevice()
 		enabled ? cout << "enabled - " : cout << "dissabled - ";
 		cout << vkDeviceExtensionProps.at( i ).extensionName << endl;
 	}
-	
 
+
+	VkDeviceCreateInfo deviceCreateInfo;
+	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	deviceCreateInfo.pNext = nullptr;
+	deviceCreateInfo.flags = 0;
+	deviceCreateInfo.queueCreateInfoCount = 1;
+	deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
+	deviceCreateInfo.enabledLayerCount = 0;
+	deviceCreateInfo.ppEnabledLayerNames = nullptr;
 	deviceCreateInfo.enabledExtensionCount = finalExtensionCount;
 	deviceCreateInfo.ppEnabledExtensionNames = _mTurnedOnDeviceExtensions.data();
+	deviceCreateInfo.pEnabledFeatures = &requiredFeatures;
 
 
 
-	returnResult = vkCreateDevice( _mGraphicsCard, &deviceCreateInfo, nullptr, &_mLogicalDevice );
+	returnResult = vkCreateDevice( _mPhysicalDevice, &deviceCreateInfo, nullptr, &_mLogicalDevice );
 
 	returnResult == VK_SUCCESS ? cout << "It worked\n\n" : cout << "It did not work\n\n";
+
+	vkGetDeviceQueue( _mLogicalDevice, graphicsQueueFamilyIndex, 0, &_mGraphicsQueue );
 
 	return returnResult;
 }
@@ -305,7 +314,8 @@ void VK_Renderer::GameLoop()
 {
 	//glfwSetWindowCloseCallback( _mWindow, window_close_callback );
 	while( glfwGetKey( _mWindow, GLFW_KEY_ESCAPE ) != GLFW_PRESS && glfwWindowShouldClose( _mWindow ) == 0 )
-	{		//render( _mWindow );
+	{
+		//render( _mWindow );
 		glfwSwapBuffers( _mWindow );
 		glfwPollEvents();
 	}
