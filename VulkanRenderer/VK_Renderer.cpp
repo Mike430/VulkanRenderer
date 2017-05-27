@@ -12,14 +12,14 @@ VK_Renderer::VK_Renderer()
 	_mWantedInstanceExtensions.push_back( VK_KHR_WIN32_SURFACE_EXTENSION_NAME );
 #endif
 
-	_mWantedDeviceExtensions.push_back( "VK_KHR_swapchain" );
+	_mWantedDeviceExtensions.push_back( VK_KHR_SWAPCHAIN_EXTENSION_NAME );
 	_mWantedDeviceExtensions.push_back( "VK_KHR_shader_draw_parameters" );
 	_mWantedDeviceExtensions.push_back( "VK_NV_glsl_shader" );
 	_mWantedDeviceExtensions.push_back( "VK_NV_viewport_swizzle" );
 	_mWantedDeviceExtensions.push_back( "VK_NV_geometry_shader_passthrough" );
 
 
-	if( initVulkanGraphicsPipeline() == VK_SUCCESS )
+	if( InitVulkanGraphicsPipeline() == VK_SUCCESS )
 	{
 		cout << "VK_Renderer constructor complete" << endl;
 		isCorrectlyInitialised = true;
@@ -41,6 +41,12 @@ VK_Renderer::~VK_Renderer()
 	glfwDestroyWindow( _mWindow ); // Can use delete because terminate alters all windows
 
 	// Shutdown Vulkan next
+	for( size_t i = 0; i < _mSwapChainImageViews.size(); i++ )
+	{
+		vkDestroyImageView( _mLogicalDevice, _mSwapChainImageViews[ i ], nullptr );
+	}
+	vkDestroySwapchainKHR( _mLogicalDevice, _mSwapChainHandle, nullptr );
+
 	vkDestroySurfaceKHR( _mVkInstance, _mWindowSurface, nullptr );
 	vkDestroyDevice( _mLogicalDevice, nullptr );
 	vkDestroyInstance( _mVkInstance, nullptr );
@@ -49,37 +55,41 @@ VK_Renderer::~VK_Renderer()
 }
 
 
-VkResult VK_Renderer::initVulkanGraphicsPipeline()
+VkResult VK_Renderer::InitVulkanGraphicsPipeline()
 {
 	VkResult returnResult = VK_SUCCESS;
 
 	// Vulkan initialisation methods follow this structure:
 	// https://vulkan.lunarg.com/doc/sdk/1.0.46.0/windows/samples_index.html
-	if( VK_SUCCESS != ( returnResult = initInstance() ) )				return returnResult;
-	if( VK_SUCCESS != ( returnResult = chooseAPhysicalDevice() ) )		return returnResult;
-	if( VK_SUCCESS != ( returnResult = initLogicalDevice() ) )			return returnResult;
+	if( VK_SUCCESS != ( returnResult = InitInstance() ) )				return returnResult;
+	if( VK_SUCCESS != ( returnResult = ChooseAPhysicalDevice() ) )		return returnResult;
+	if( VK_SUCCESS != ( returnResult = InitLogicalDevice() ) )			return returnResult;
 
 	if( !glfwInit() )
 	{
 		cout << "GLFW couldn't be initialised" << endl;
+		return VK_ERROR_EXTENSION_NOT_PRESENT;
 	}
 	else
 	{
 		if( glfwVulkanSupported() )
 		{
-			CreateVulkanWindowSurface();
+			if( VK_SUCCESS != ( returnResult = CreateVulkanWindowSurface() ) ) return returnResult;
 		}
 		else
 		{
 			cout << "Vulkan is NOT available to GLFW" << endl;
+			return VK_ERROR_EXTENSION_NOT_PRESENT;
 		}
 	}
+
+	if( VK_SUCCESS != ( returnResult = CreateGraphicalPipeline() ) )	return returnResult;
 
 	return returnResult;
 }
 
 
-VkResult VK_Renderer::initInstance()
+VkResult VK_Renderer::InitInstance()
 {
 	VkResult returnResult;
 
@@ -130,8 +140,9 @@ VkResult VK_Renderer::initInstance()
 }
 
 
-VkResult VK_Renderer::chooseAPhysicalDevice()
+VkResult VK_Renderer::ChooseAPhysicalDevice()
 {
+	vector<VkPhysicalDevice> physicalDevices;
 	uint32_t physicalDeviceCount = 0;
 	VkResult returnResult = vkEnumeratePhysicalDevices( _mVkInstance,
 														&physicalDeviceCount,
@@ -141,10 +152,10 @@ VkResult VK_Renderer::chooseAPhysicalDevice()
 	if( returnResult == VK_SUCCESS || physicalDeviceCount == 0 )
 	{
 		// Size the device array appropriately and get the physical device handles
-		_mPhysicalDevices.resize( physicalDeviceCount );
+		physicalDevices.resize( physicalDeviceCount );
 		returnResult = vkEnumeratePhysicalDevices( _mVkInstance,
 												   &physicalDeviceCount,
-												   &_mPhysicalDevices[ 0 ] );
+												   &physicalDevices[ 0 ] );
 	}
 	else
 	{
@@ -152,17 +163,17 @@ VkResult VK_Renderer::chooseAPhysicalDevice()
 		return returnResult;
 	}
 
-	cout << _mPhysicalDevices.size() << " Physical Device(s) have been found on this system." << endl;
+	cout << physicalDevices.size() << " Physical Device(s) have been found on this system." << endl;
 
 	VkPhysicalDeviceProperties physicalDeviceProperties = VkPhysicalDeviceProperties();
 	VkPhysicalDeviceProperties temp_PhysicalDeviceProperties = VkPhysicalDeviceProperties();
 	int winningIndex = 0;
 
-	for( int i = 0; i < _mPhysicalDevices.size(); i++ )
+	for( int i = 0; i < physicalDevices.size(); i++ )
 	{
-		vkGetPhysicalDeviceProperties( _mPhysicalDevices.at( i ), &temp_PhysicalDeviceProperties );
+		vkGetPhysicalDeviceProperties( physicalDevices.at( i ), &temp_PhysicalDeviceProperties );
 
-		cout << i << "\nVkHandle\t" << _mPhysicalDevices.at( i ) <<
+		cout << i << "\nVkHandle\t" << physicalDevices.at( i ) <<
 			"\nDevice name:\t" << temp_PhysicalDeviceProperties.deviceName <<
 			"\nDevice type:\t" << temp_PhysicalDeviceProperties.deviceType << // typedef enum VKPhysicalDeviceType {0-4} - 2 = Descrete GPU
 			"\nDevice cpty:\t" << temp_PhysicalDeviceProperties.limits.maxMemoryAllocationCount << endl;
@@ -182,13 +193,13 @@ VkResult VK_Renderer::chooseAPhysicalDevice()
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
 
-	_mPhysicalDevice = _mPhysicalDevices.at( winningIndex );
+	_mPhysicalDevice = physicalDevices.at( winningIndex );
 	cout << "\nWe're using the " << physicalDeviceProperties.deviceName << " for graphics\n" << endl;
 	return VK_SUCCESS;
 }
 
 
-VkResult VK_Renderer::initLogicalDevice()
+VkResult VK_Renderer::InitLogicalDevice()
 {
 	VkResult returnResult;
 
@@ -284,7 +295,90 @@ VkResult VK_Renderer::initLogicalDevice()
 }
 
 
-void VK_Renderer::CreateVulkanWindowSurface()
+VkResult VK_Renderer::InitSwapChain()
+{
+	VkResult returnResult;
+	uint32_t imageCount = 2; // double buffering
+
+	VkSurfaceCapabilitiesKHR surfaceCapabilities = {};
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR( _mPhysicalDevice, _mWindowSurface, &surfaceCapabilities );
+	VkExtent2D surfaceResolution = surfaceCapabilities.currentExtent;
+	uint32_t width = surfaceResolution.width;
+	uint32_t height = surfaceResolution.height;
+
+	VkSwapchainCreateInfoKHR swapChainCreateInfo = {};
+	swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	swapChainCreateInfo.surface = _mWindowSurface;
+	swapChainCreateInfo.minImageCount = imageCount;
+	swapChainCreateInfo.imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+	swapChainCreateInfo.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+	swapChainCreateInfo.imageExtent = surfaceResolution;
+	swapChainCreateInfo.imageArrayLayers = 1;
+	swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	swapChainCreateInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+	swapChainCreateInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+	swapChainCreateInfo.clipped = true;
+	swapChainCreateInfo.oldSwapchain = NULL;
+
+	returnResult = vkCreateSwapchainKHR( _mLogicalDevice, &swapChainCreateInfo, 0, &_mSwapChainHandle );
+
+	if( returnResult == VK_SUCCESS )
+	{
+		uint32_t newImageCount;
+		vkGetSwapchainImagesKHR( _mLogicalDevice, _mSwapChainHandle, &newImageCount, nullptr );
+
+		if( imageCount != newImageCount )
+		{
+			cout << "ERROR: shift in image count from " << imageCount << " to " << newImageCount << endl;
+			return VK_ERROR_VALIDATION_FAILED_EXT;
+		}
+
+		returnResult = vkGetSwapchainImagesKHR( _mLogicalDevice, _mSwapChainHandle, &imageCount, _mSwapChainImages.data() );
+
+		if( returnResult == VK_SUCCESS )
+		{
+			for( int i = 0; i < imageCount; i++ )
+			{
+				VkImageViewCreateInfo imageViewCreateInfo = {};
+				imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+				imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D; // render to a 2D image
+				imageViewCreateInfo.format = VK_FORMAT_B8G8R8A8_UNORM; // colour format
+				imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+				imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+				imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+				imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+				imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+				imageViewCreateInfo.subresourceRange.levelCount = 1;
+				imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+				imageViewCreateInfo.subresourceRange.layerCount = 1;
+				imageViewCreateInfo.image = _mSwapChainImages.at(i);
+
+				returnResult = vkCreateImageView(_mLogicalDevice, &imageViewCreateInfo, NULL, &_mSwapChainImageViews.at(i));
+			}
+		}
+		else
+		{
+			cout << endl << "ERROR: could not put images into swap chain" << endl;
+		}
+	}
+	else
+	{
+		cout << endl << "ERROR: could not create swap chain" << endl;
+	}
+
+	return returnResult;
+}
+
+VkResult VK_Renderer::CreateGraphicalPipeline()
+{
+	return VK_SUCCESS;
+}
+
+
+// Needs to be made a part of the core game engine as the renderer shouldn't have responcibility over window and input management.
+VkResult VK_Renderer::CreateVulkanWindowSurface()
 {
 	// Creates a window "without a context" - Go here to find out more: http://www.glfw.org/docs/latest/context_guide.html#context_less
 	glfwWindowHint( GLFW_CLIENT_API, GLFW_NO_API );
@@ -300,10 +394,9 @@ void VK_Renderer::CreateVulkanWindowSurface()
 	glfwMakeContextCurrent( _mWindow );
 	glfwSetInputMode( _mWindow, GLFW_STICKY_KEYS, VK_TRUE );
 	glfwSetInputMode( _mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL );
+
+	return returnResult;
 }
-
-
-
 
 
 
