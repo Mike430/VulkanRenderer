@@ -32,6 +32,11 @@ private:
 	// GLFW Variables
 	GLFWwindow*									_mWindow;
 
+	// Shared Variables
+	uint32_t									_mWidth = 1600;
+	uint32_t									_mHeight = 900;
+	uint8_t										_mChainImageIndex = 0;
+
 	// Vulkan variables
 	VkApplicationInfo							_mAppInfo;
 	VkInstanceCreateInfo						_mInstanceCreateInfo;
@@ -40,24 +45,32 @@ private:
 	VkPhysicalDevice							_mPhysicalDevice;					// Of the potentially many devices, this renderer will only utilize one
 	VkDevice									_mLogicalDevice;					// Abstraction of the hardware
 	VkQueue										_mGraphicsQueue;					// The handle through which we'll send graphical instructions
+	uint32_t									_mGraphicsQueueDeviceIndex;			// Where the Graphics queue is on the graphics card
+	VkCommandPool								_mGraphicsQueueCmdPool;				// 
+	VkCommandBuffer								_mGraphicsQueueCmdBuffer;			//
+	VkRenderPass								_mRenderPass;						//
 	VkSurfaceKHR								_mWindowSurface;					// The window "Surface" Vulkan will be drawing onto
 
 
 	VkSwapchainKHR								_mSwapChainHandle;
 	vector<VkImage>								_mSwapChainImages;					// Every immage needs an image view, conside a struct
+	vector<VkImageView>							_mSwapChainImageViews;
+	vector<VkFramebuffer>						_mSwapChainFrameBuffers;
 	VkExtent2D									_mSwapChainSurfaceResolution;
 	VkFormat									_mSwapChainImageFormat;
-	vector<VkImageView>							_mSwapChainImageViews;
 
 
 	// Methods
 	// Vulkan
-	VkResult									InitVulkanGraphicsPipeline();
+	VkResult									InitVulkanDevicesAndRenderer();
 	VkResult									InitInstance();
 	VkResult									ChooseAPhysicalDevice();
 	VkResult									InitLogicalDevice();
+
+	VkResult									InitVulkanGraphicalPipeline();
 	VkResult									InitSwapChain();
-	VkResult									CreateGraphicalPipeline();
+	VkResult									InitGraphicsQueue();
+	VkResult									InitFrameBuffers();
 
 	// GLFW
 	VkResult									CreateVulkanWindowSurface();
@@ -67,4 +80,23 @@ public:
 
 	bool										isCorrectlyInitialised;
 	void										GameLoop();
+	void										RenderScene();
 };
+
+/*
+struct VkGraphicsCard
+{
+	VkPhysicalDevice							_mPhysicalDevice;
+	VkQueue										_mGraphicsQueue;
+	VkCommandBuffer								_mCommandBuffer;
+	VkCommandPool								_mCommandPool;
+	uint32_t									_graphicsQueueIndex;
+};
+
+struct VkImageSet
+{
+	VkImage										_mImage;
+	VkImageView									_mImageView;
+	VkFramebuffer								_mFrameBuffer;
+};
+*/

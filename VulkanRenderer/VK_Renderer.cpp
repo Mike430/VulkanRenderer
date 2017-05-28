@@ -19,7 +19,7 @@ VK_Renderer::VK_Renderer()
 	_mWantedDeviceExtensions.push_back( "VK_NV_geometry_shader_passthrough" );
 
 
-	if( InitVulkanGraphicsPipeline() == VK_SUCCESS )
+	if( InitVulkanDevicesAndRenderer() == VK_SUCCESS )
 	{
 		cout << "VK_Renderer constructor complete" << endl;
 		isCorrectlyInitialised = true;
@@ -55,7 +55,7 @@ VK_Renderer::~VK_Renderer()
 }
 
 
-VkResult VK_Renderer::InitVulkanGraphicsPipeline()
+VkResult VK_Renderer::InitVulkanDevicesAndRenderer()
 {
 	VkResult returnResult = VK_SUCCESS;
 
@@ -83,7 +83,7 @@ VkResult VK_Renderer::InitVulkanGraphicsPipeline()
 		}
 	}
 
-	if( VK_SUCCESS != ( returnResult = CreateGraphicalPipeline() ) )	return returnResult;
+	if( VK_SUCCESS != ( returnResult = InitVulkanGraphicalPipeline() ) )	return returnResult;
 
 	return returnResult;
 }
@@ -109,10 +109,10 @@ VkResult VK_Renderer::InitInstance()
 	vector<VkExtensionProperties> vkInstanceExtensionProps( extensionCount );
 	vkEnumerateInstanceExtensionProperties( nullptr, &extensionCount, vkInstanceExtensionProps.data() );
 
-	for( int i = 0; i < vkInstanceExtensionProps.size(); i++ )
+	for( unsigned i = 0; i < vkInstanceExtensionProps.size(); i++ )
 	{
 		bool enabled = false;
-		for( int j = 0; j < _mWantedInstanceExtensions.size(); j++ )
+		for( unsigned j = 0; j < _mWantedInstanceExtensions.size(); j++ )
 		{
 			if( strcmp( _mWantedInstanceExtensions.at( j ), vkInstanceExtensionProps.at( i ).extensionName ) == 0 )
 			{
@@ -169,7 +169,7 @@ VkResult VK_Renderer::ChooseAPhysicalDevice()
 	VkPhysicalDeviceProperties temp_PhysicalDeviceProperties = VkPhysicalDeviceProperties();
 	int winningIndex = 0;
 
-	for( int i = 0; i < physicalDevices.size(); i++ )
+	for( unsigned i = 0; i < physicalDevices.size(); i++ )
 	{
 		vkGetPhysicalDeviceProperties( physicalDevices.at( i ), &temp_PhysicalDeviceProperties );
 
@@ -216,16 +216,16 @@ VkResult VK_Renderer::InitLogicalDevice()
 	vkGetPhysicalDeviceQueueFamilyProperties( _mPhysicalDevice, &queueFamilyCount, nullptr );
 	vector<VkQueueFamilyProperties> familyProperties( queueFamilyCount );
 	vkGetPhysicalDeviceQueueFamilyProperties( _mPhysicalDevice, &queueFamilyCount, familyProperties.data() );
-	int graphicsQueueFamilyIndex = 0;
+	_mGraphicsQueueDeviceIndex = 0;
 
-	for( int i = 0; i < queueFamilyCount; i++ )
+	for( unsigned i = 0; i < queueFamilyCount; i++ )
 	{
 		cout << VK_QUEUE_GRAPHICS_BIT << " - " << familyProperties.at( i ).queueFlags;
 
 		if( VK_QUEUE_GRAPHICS_BIT & familyProperties.at( i ).queueFlags )
 		{
 			cout << " : This is the graphics queue." << endl;
-			graphicsQueueFamilyIndex = i;
+			_mGraphicsQueueDeviceIndex = i;
 		}
 		else
 		{
@@ -239,7 +239,7 @@ VkResult VK_Renderer::InitLogicalDevice()
 	deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 	deviceQueueCreateInfo.pNext = nullptr;
 	deviceQueueCreateInfo.flags = 0;
-	deviceQueueCreateInfo.queueFamilyIndex = graphicsQueueFamilyIndex;
+	deviceQueueCreateInfo.queueFamilyIndex = _mGraphicsQueueDeviceIndex;
 	deviceQueueCreateInfo.queueCount = 1;
 	deviceQueueCreateInfo.pQueuePriorities = queuePriorities;
 
@@ -253,10 +253,10 @@ VkResult VK_Renderer::InitLogicalDevice()
 	vkEnumerateDeviceExtensionProperties( _mPhysicalDevice, nullptr, &extensionCount, vkDeviceExtensionProps.data() );
 
 	// If the extensions we want exist, add them to the vector we'll use for enabling them
-	for( int i = 0; i < vkDeviceExtensionProps.size(); i++ )
+	for( unsigned i = 0; i < vkDeviceExtensionProps.size(); i++ )
 	{
 		bool enabled = false;
-		for( int j = 0; j < _mWantedDeviceExtensions.size(); j++ )
+		for( unsigned j = 0; j < _mWantedDeviceExtensions.size(); j++ )
 		{
 			if( strcmp( _mWantedDeviceExtensions.at( j ), vkDeviceExtensionProps.at( i ).extensionName ) == 0 )
 			{
@@ -289,8 +289,20 @@ VkResult VK_Renderer::InitLogicalDevice()
 
 	returnResult == VK_SUCCESS ? cout << "It worked\n\n" : cout << "It did not work\n\n";
 
-	vkGetDeviceQueue( _mLogicalDevice, graphicsQueueFamilyIndex, 0, &_mGraphicsQueue );
+	vkGetDeviceQueue( _mLogicalDevice, _mGraphicsQueueDeviceIndex, 0, &_mGraphicsQueue );
 
+	return returnResult;
+}
+
+
+
+
+VkResult VK_Renderer::InitVulkanGraphicalPipeline()
+{
+	VkResult returnResult = VK_SUCCESS;
+	if( VK_SUCCESS != ( returnResult = InitSwapChain() ) )				return returnResult;
+	if( VK_SUCCESS != ( returnResult = InitGraphicsQueue() ) )			return returnResult;
+	if( VK_SUCCESS != ( returnResult = InitFrameBuffers() ) )			return returnResult;
 	return returnResult;
 }
 
@@ -334,11 +346,13 @@ VkResult VK_Renderer::InitSwapChain()
 			return VK_ERROR_VALIDATION_FAILED_EXT;
 		}
 
+		_mSwapChainImages.resize( imageCount );
+		_mSwapChainImageViews.resize( imageCount );
 		returnResult = vkGetSwapchainImagesKHR( _mLogicalDevice, _mSwapChainHandle, &imageCount, _mSwapChainImages.data() );
 
 		if( returnResult == VK_SUCCESS )
 		{
-			for( int i = 0; i < imageCount; i++ )
+			for( unsigned i = 0; i < imageCount; i++ )
 			{
 				VkImageViewCreateInfo imageViewCreateInfo = {};
 				imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -353,9 +367,14 @@ VkResult VK_Renderer::InitSwapChain()
 				imageViewCreateInfo.subresourceRange.levelCount = 1;
 				imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
 				imageViewCreateInfo.subresourceRange.layerCount = 1;
-				imageViewCreateInfo.image = _mSwapChainImages.at(i);
+				imageViewCreateInfo.image = _mSwapChainImages.at( i );
 
-				returnResult = vkCreateImageView(_mLogicalDevice, &imageViewCreateInfo, NULL, &_mSwapChainImageViews.at(i));
+				returnResult = vkCreateImageView( _mLogicalDevice, &imageViewCreateInfo, NULL, &_mSwapChainImageViews.at( i ) );
+			}
+
+			if( returnResult == VK_SUCCESS )
+			{
+				cout << endl << "Swap Chain initialised correctly" << endl << endl;
 			}
 		}
 		else
@@ -371,9 +390,107 @@ VkResult VK_Renderer::InitSwapChain()
 	return returnResult;
 }
 
-VkResult VK_Renderer::CreateGraphicalPipeline()
+
+VkResult VK_Renderer::InitGraphicsQueue()
 {
-	return VK_SUCCESS;
+	VkResult returnResult = VK_SUCCESS;
+	// _mGraphicsQueue fetched with vkGetDeviceQueue in initLogicalDevice
+
+	VkCommandPoolCreateInfo cmdPoolCreateInfo;
+	cmdPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	cmdPoolCreateInfo.queueFamilyIndex = _mGraphicsQueueDeviceIndex;
+
+	returnResult = vkCreateCommandPool( _mLogicalDevice, &cmdPoolCreateInfo, NULL, &_mGraphicsQueueCmdPool );
+
+	if( returnResult != VK_SUCCESS )
+	{
+		cout << "Graphics command pool could not be initialised." << endl;
+		return returnResult;
+	}
+
+	VkCommandBufferAllocateInfo cmdBufferAllocInfo;
+	cmdBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cmdBufferAllocInfo.commandPool = _mGraphicsQueueCmdPool;
+	cmdBufferAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	cmdBufferAllocInfo.commandBufferCount = 1; // Test significance
+
+	returnResult = vkAllocateCommandBuffers( _mLogicalDevice, &cmdBufferAllocInfo, &_mGraphicsQueueCmdBuffer );
+
+	if( returnResult != VK_SUCCESS )
+	{
+		cout << "Graphics command buffer could not be initialised." << endl;
+		return returnResult;
+	}
+
+	cout << "Graphics command pool & buffer initialised." << endl;
+	return returnResult;
+}
+
+
+VkResult VK_Renderer::InitFrameBuffers()
+{
+	VkResult returnResult = VK_SUCCESS;
+
+	VkAttachmentDescription pass[ 1 ] = {};
+	pass[ 0 ].format = VK_FORMAT_B8G8R8_UNORM;
+	pass[ 0 ].samples = VK_SAMPLE_COUNT_1_BIT; // render pixels multiple times
+	pass[ 0 ].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	pass[ 0 ].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	pass[ 0 ].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	pass[ 0 ].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	pass[ 0 ].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	pass[ 0 ].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference attachmentRef = {};
+	attachmentRef.attachment = 0;
+	attachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subPass = {};
+	subPass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subPass.colorAttachmentCount = 1;
+	subPass.pColorAttachments = &attachmentRef;
+	subPass.pDepthStencilAttachment = 0;
+
+	VkRenderPassCreateInfo renderPassCreateInfo = {};
+	renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassCreateInfo.attachmentCount = 1;
+	renderPassCreateInfo.pAttachments = pass; // An array is pointer with null terminator
+	renderPassCreateInfo.subpassCount = 1;
+	renderPassCreateInfo.pSubpasses = &subPass;
+
+	returnResult = vkCreateRenderPass( _mLogicalDevice, &renderPassCreateInfo, 0, &_mRenderPass );
+
+	if( returnResult != VK_SUCCESS )
+	{
+		cout << "We were not able to create a render pass." << endl;
+		return returnResult;
+	}
+	cout << "Render pass created" << endl;
+
+	_mSwapChainFrameBuffers.resize( 2 );
+
+	for( int i = 0; i < 2; i++ )
+	{
+		VkFramebufferCreateInfo frameBufferCreateInfo = {};
+		frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		frameBufferCreateInfo.pNext = nullptr;
+		frameBufferCreateInfo.renderPass = _mRenderPass;
+		frameBufferCreateInfo.attachmentCount = 1;
+		frameBufferCreateInfo.pAttachments = &_mSwapChainImageViews.at( i );
+		frameBufferCreateInfo.width = _mWidth;
+		frameBufferCreateInfo.height = _mHeight;
+		frameBufferCreateInfo.layers = 1;
+
+		returnResult = vkCreateFramebuffer( _mLogicalDevice, &frameBufferCreateInfo, NULL, &_mSwapChainFrameBuffers.at( i ) );
+
+		if( returnResult != VK_SUCCESS )
+		{
+			cout << "FrameBuffer " << i << " was not initialised properly" << endl;
+		}
+	}
+
+	return returnResult;
 }
 
 
@@ -382,7 +499,7 @@ VkResult VK_Renderer::CreateVulkanWindowSurface()
 {
 	// Creates a window "without a context" - Go here to find out more: http://www.glfw.org/docs/latest/context_guide.html#context_less
 	glfwWindowHint( GLFW_CLIENT_API, GLFW_NO_API );
-	_mWindow = glfwCreateWindow( 1600, 900, "Vulkan Renderer", NULL, NULL );
+	_mWindow = glfwCreateWindow( _mWidth, _mHeight, "Vulkan Renderer", NULL, NULL );
 
 	// Creating a Vulkan window surface
 	VkResult returnResult = glfwCreateWindowSurface( _mVkInstance, _mWindow, NULL, &_mWindowSurface );
@@ -409,7 +526,86 @@ void VK_Renderer::GameLoop()
 	while( glfwGetKey( _mWindow, GLFW_KEY_ESCAPE ) != GLFW_PRESS && glfwWindowShouldClose( _mWindow ) == 0 )
 	{
 		//render( _mWindow );
-		glfwSwapBuffers( _mWindow );
+		RenderScene();
+		//glfwSwapBuffers( _mWindow );
 		glfwPollEvents();
+	}
+	vkDeviceWaitIdle(_mLogicalDevice);
+}
+
+
+void VK_Renderer::RenderScene()
+{
+	uint32_t nextImageIndex;
+	//vkAcquireNextImageKHR( _mLogicalDevice, _mSwapChainHandle, UINT64_MAX, VK_NULL_HANDLE, VK_NULL_HANDLE, &nextImageIndex );
+	_mChainImageIndex == 0 ? _mChainImageIndex = 1 : _mChainImageIndex = 0;
+
+	VkCommandBufferBeginInfo newBufferInfo = {};
+	newBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	newBufferInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	vkBeginCommandBuffer( _mGraphicsQueueCmdBuffer, &newBufferInfo );
+	{
+		VkClearValue clearImageValue[] =
+		{
+			// The clearing colour
+			{0.0f, 0.0f, 0.0f, 1.0f},
+			// The depth & stencil clearing values
+			{1.0f, 0.0f}
+		};
+
+		VkRenderPassBeginInfo renderPassBeginInfo = {};
+		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassBeginInfo.renderPass = _mRenderPass;
+		renderPassBeginInfo.framebuffer = _mSwapChainFrameBuffers.at( _mChainImageIndex );
+
+		VkOffset2D start;
+		start.x = 0;
+		start.y = 0;
+
+		VkExtent2D dimensions;
+		dimensions.height = _mHeight;
+		dimensions.width = _mWidth;
+
+		VkRect2D rect;
+		rect.offset = start;
+		rect.extent = dimensions;
+
+		renderPassBeginInfo.renderArea = rect;
+		renderPassBeginInfo.clearValueCount = 2;
+		renderPassBeginInfo.pClearValues = clearImageValue;
+
+		vkCmdBeginRenderPass( _mGraphicsQueueCmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_END_RANGE );
+
+		// Custom render code goes here
+
+		// Custom render code stops here
+
+		vkCmdEndRenderPass( _mGraphicsQueueCmdBuffer );
+
+		// Fence will only allow a buffer swap when the GPU is finished drawing.
+		VkFence renderFence;
+		VkFenceCreateInfo fenceCreateInfo = {};
+		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		vkCreateFence( _mLogicalDevice, &fenceCreateInfo, NULL, &renderFence );
+
+		// for submitting the Fence to the Queue
+		VkSubmitInfo submitInfo = {};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.waitSemaphoreCount = 0;
+		submitInfo.pWaitSemaphores = VK_NULL_HANDLE;
+		submitInfo.pWaitDstStageMask = NULL;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &_mGraphicsQueueCmdBuffer;
+		submitInfo.signalSemaphoreCount = 0;
+		submitInfo.pSignalSemaphores = VK_NULL_HANDLE;
+
+		// submit the all the above work to the GPU queue
+		vkQueueSubmit( _mGraphicsQueue, 1, &submitInfo, renderFence );
+
+		vkWaitForFences( _mLogicalDevice, 1, &renderFence, VK_TRUE, UINT64_MAX );
+
+		vkDestroyFence( _mLogicalDevice, renderFence, NULL );
+		//cout << "yippie" << endl;
 	}
 }
