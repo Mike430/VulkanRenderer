@@ -6,6 +6,9 @@ VK_Renderer::VK_Renderer()
 {
 	cout << "VK_Renderer constructor called" << endl;
 
+	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_swapchain" );
+	_mWantedInstanceLayers.push_back( "VK_LAYER_NV_optimus" );
+
 	// Declare a lists of all extensions we want to feed into our Vulkan Instance and Device
 	_mWantedInstanceExtensions.push_back( VK_KHR_SURFACE_EXTENSION_NAME );
 #if defined(VK_USE_PLATFORM_WIN32_KHR) // won't stop x64 builds - it's up to vulkan weather it's used
@@ -61,9 +64,9 @@ VkResult VK_Renderer::InitVulkanDevicesAndRenderer()
 
 	// Vulkan initialisation methods follow this structure:
 	// https://vulkan.lunarg.com/doc/sdk/1.0.46.0/windows/samples_index.html
-	if( VK_SUCCESS != ( returnResult = InitInstance() ) )				return returnResult;
-	if( VK_SUCCESS != ( returnResult = ChooseAPhysicalDevice() ) )		return returnResult;
-	if( VK_SUCCESS != ( returnResult = InitLogicalDevice() ) )			return returnResult;
+	if( VK_SUCCESS != ( returnResult = InitInstance() ) )					return returnResult;
+	if( VK_SUCCESS != ( returnResult = ChooseAPhysicalDevice() ) )			return returnResult;
+	if( VK_SUCCESS != ( returnResult = InitLogicalDevice() ) )				return returnResult;
 
 	if( !glfwInit() )
 	{
@@ -101,35 +104,40 @@ VkResult VK_Renderer::InitInstance()
 	_mAppInfo.engineVersion = 1;
 	_mAppInfo.apiVersion = VK_MAKE_VERSION( 1, 0, 0 );
 
+	// Layers
+	uint32_t layerCount;
+	vkEnumerateInstanceLayerProperties( &layerCount, nullptr );
+	cout << "We have " << layerCount << " layers available to the instance. They are:" << endl;
+	vector<VkLayerProperties> vkLayerProps(layerCount);
+	vkEnumerateInstanceLayerProperties( &layerCount, vkLayerProps.data() );
 
+	vector<const char*> avalableNames;
+	for( int i = 0; i < vkLayerProps.size(); i++ )
+	{
+		avalableNames.push_back( vkLayerProps.at( i ).layerName );
+	}
+	_mTurnedOnInstanceLayers = FindCommonCStrings(_mWantedInstanceLayers, avalableNames);
+
+	// Extensions
 	uint32_t extensionCount;
-	uint32_t finalExtensionCount = 0;
 	vkEnumerateInstanceExtensionProperties( nullptr, &extensionCount, nullptr );
 	cout << "We have " << extensionCount << " extensions available to the instance. They are:" << endl;
 	vector<VkExtensionProperties> vkInstanceExtensionProps( extensionCount );
 	vkEnumerateInstanceExtensionProperties( nullptr, &extensionCount, vkInstanceExtensionProps.data() );
 
-	for( unsigned i = 0; i < vkInstanceExtensionProps.size(); i++ )
+	avalableNames.clear();
+	for( int i = 0; i < vkInstanceExtensionProps.size(); i++ )
 	{
-		bool enabled = false;
-		for( unsigned j = 0; j < _mWantedInstanceExtensions.size(); j++ )
-		{
-			if( strcmp( _mWantedInstanceExtensions.at( j ), vkInstanceExtensionProps.at( i ).extensionName ) == 0 )
-			{
-				_mTurnedOnInstanceExtensions.push_back( _mWantedInstanceExtensions.at( j ) );
-				finalExtensionCount++;
-				enabled = true;
-				continue;
-			}
-		}
-		enabled ? cout << "enabled - " : cout << "dissabled - ";
-		cout << vkInstanceExtensionProps.at( i ).extensionName << endl;
+		avalableNames.push_back( vkInstanceExtensionProps.at( i ).extensionName );
 	}
+	_mTurnedOnInstanceExtensions = FindCommonCStrings( _mWantedInstanceExtensions, avalableNames );
 
 
 	_mInstanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	_mInstanceCreateInfo.pApplicationInfo = &_mAppInfo;
-	_mInstanceCreateInfo.enabledExtensionCount = finalExtensionCount;
+	_mInstanceCreateInfo.enabledLayerCount = _mTurnedOnInstanceLayers.size();
+	_mInstanceCreateInfo.ppEnabledLayerNames = _mTurnedOnInstanceLayers.data();
+	_mInstanceCreateInfo.enabledExtensionCount = _mTurnedOnInstanceExtensions.size();
 	_mInstanceCreateInfo.ppEnabledExtensionNames = _mTurnedOnInstanceExtensions.data();
 
 	returnResult = vkCreateInstance( &_mInstanceCreateInfo,
@@ -246,29 +254,18 @@ VkResult VK_Renderer::InitLogicalDevice()
 
 	// Get the available extensions
 	uint32_t extensionCount;
-	uint32_t finalExtensionCount = 0;
 	vkEnumerateDeviceExtensionProperties( _mPhysicalDevice, nullptr, &extensionCount, nullptr );
 	cout << endl << "We have " << extensionCount << " extensions on the chosen graphics card. They are:" << endl;
 	vector<VkExtensionProperties> vkDeviceExtensionProps( extensionCount );
 	vkEnumerateDeviceExtensionProperties( _mPhysicalDevice, nullptr, &extensionCount, vkDeviceExtensionProps.data() );
 
-	// If the extensions we want exist, add them to the vector we'll use for enabling them
-	for( unsigned i = 0; i < vkDeviceExtensionProps.size(); i++ )
+
+	vector<const char*> avalableNames;
+	for( int i = 0; i < vkDeviceExtensionProps.size(); i++ )
 	{
-		bool enabled = false;
-		for( unsigned j = 0; j < _mWantedDeviceExtensions.size(); j++ )
-		{
-			if( strcmp( _mWantedDeviceExtensions.at( j ), vkDeviceExtensionProps.at( i ).extensionName ) == 0 )
-			{
-				_mTurnedOnDeviceExtensions.push_back( _mWantedDeviceExtensions.at( j ) );
-				finalExtensionCount++;
-				enabled = true;
-				continue;
-			}
-		}
-		enabled ? cout << "enabled - " : cout << "dissabled - ";
-		cout << vkDeviceExtensionProps.at( i ).extensionName << endl;
+		avalableNames.push_back( vkDeviceExtensionProps.at( i ).extensionName );
 	}
+	_mTurnedOnDeviceExtensions = FindCommonCStrings( _mWantedDeviceExtensions, avalableNames );
 
 
 	VkDeviceCreateInfo deviceCreateInfo;
@@ -279,7 +276,7 @@ VkResult VK_Renderer::InitLogicalDevice()
 	deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
 	deviceCreateInfo.enabledLayerCount = 0;
 	deviceCreateInfo.ppEnabledLayerNames = nullptr;
-	deviceCreateInfo.enabledExtensionCount = finalExtensionCount;
+	deviceCreateInfo.enabledExtensionCount = _mTurnedOnDeviceExtensions.size();
 	deviceCreateInfo.ppEnabledExtensionNames = _mTurnedOnDeviceExtensions.data();
 	deviceCreateInfo.pEnabledFeatures = &requiredFeatures;
 
@@ -450,7 +447,7 @@ VkResult VK_Renderer::InitFrameBuffers()
 	subPass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 	subPass.colorAttachmentCount = 1;
 	subPass.pColorAttachments = &attachmentRef;
-	subPass.pDepthStencilAttachment = 0;
+	subPass.pDepthStencilAttachment = nullptr;
 
 	VkRenderPassCreateInfo renderPassCreateInfo = {};
 	renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -459,7 +456,7 @@ VkResult VK_Renderer::InitFrameBuffers()
 	renderPassCreateInfo.subpassCount = 1;
 	renderPassCreateInfo.pSubpasses = &subPass;
 
-	returnResult = vkCreateRenderPass( _mLogicalDevice, &renderPassCreateInfo, 0, &_mRenderPass );
+	returnResult = vkCreateRenderPass( _mLogicalDevice, &renderPassCreateInfo, nullptr, &_mRenderPass );
 
 	if( returnResult != VK_SUCCESS )
 	{
@@ -536,9 +533,9 @@ void VK_Renderer::GameLoop()
 
 void VK_Renderer::RenderScene()
 {
-	uint32_t nextImageIndex;
-	//vkAcquireNextImageKHR( _mLogicalDevice, _mSwapChainHandle, UINT64_MAX, VK_NULL_HANDLE, VK_NULL_HANDLE, &nextImageIndex );
-	_mChainImageIndex == 0 ? _mChainImageIndex = 1 : _mChainImageIndex = 0;
+	vkAcquireNextImageKHR( _mLogicalDevice, _mSwapChainHandle, UINT64_MAX, VK_NULL_HANDLE, VK_NULL_HANDLE, &_mChainNextImageIndex );
+	cout << _mChainNextImageIndex;
+	//_mChainNextImageIndex == 0 ? _mChainNextImageIndex = 1 : _mChainNextImageIndex = 0;
 
 	VkCommandBufferBeginInfo newBufferInfo = {};
 	newBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -546,18 +543,18 @@ void VK_Renderer::RenderScene()
 
 	vkBeginCommandBuffer( _mGraphicsQueueCmdBuffer, &newBufferInfo );
 	{
+		VkClearValue cv = {0.5f, 0.5f, 0.5f, 1.0f};
+		cv.depthStencil.depth = 0.0f;
+		cv.depthStencil.stencil = 0.0f;
 		VkClearValue clearImageValue[] =
 		{
-			// The clearing colour
-			{0.0f, 0.0f, 0.0f, 1.0f},
-			// The depth & stencil clearing values
-			{1.0f, 0.0f}
+			cv
 		};
 
 		VkRenderPassBeginInfo renderPassBeginInfo = {};
 		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassBeginInfo.renderPass = _mRenderPass;
-		renderPassBeginInfo.framebuffer = _mSwapChainFrameBuffers.at( _mChainImageIndex );
+		renderPassBeginInfo.framebuffer = _mSwapChainFrameBuffers.at( _mChainNextImageIndex );
 
 		VkOffset2D start;
 		start.x = 0;

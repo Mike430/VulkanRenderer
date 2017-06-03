@@ -17,15 +17,21 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "Utilities.h"
+
 // namespaces
 using namespace std;
+using namespace Utilities;
 
 class VK_Renderer
 {
 private:
 	// C strings for searching in Vulkan.h
+	vector<const char*>							_mWantedInstanceLayers;
 	vector<const char*>							_mWantedInstanceExtensions;
 	vector<const char*>							_mWantedDeviceExtensions;
+
+	vector<const char*>							_mTurnedOnInstanceLayers;
 	vector<const char*>							_mTurnedOnInstanceExtensions;
 	vector<const char*>							_mTurnedOnDeviceExtensions;
 
@@ -35,7 +41,7 @@ private:
 	// Shared Variables
 	uint32_t									_mWidth = 1600;
 	uint32_t									_mHeight = 900;
-	uint8_t										_mChainImageIndex = 0;
+	uint32_t										_mChainNextImageIndex = 0;
 
 	// Vulkan variables
 	VkApplicationInfo							_mAppInfo;
