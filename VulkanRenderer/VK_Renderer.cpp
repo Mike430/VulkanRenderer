@@ -6,20 +6,20 @@ VK_Renderer::VK_Renderer()
 {
 	cout << "VK_Renderer constructor called" << endl;
 
-	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_api_dump" ); // explain everything through the consol as it happens
-	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_core_validation" ); // highly useful
+	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_api_dump" ); // Doesn't show errors, just shows the evolution of your vulkan app by dumping every key change that occures
+	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_core_validation" ); // Logs every error that occures
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_monitor" );
 	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_object_tracker" ); // tells you have you haven't deleted when cleaning up
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_parameter_validation" );
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_screenshot" );
-	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_swapchain" );
+	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_swapchain" ); // specifically targets swapchain issues
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_GOOGLE_threading" );
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_GOOGLE_unique_objects" );
-	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_vktrace" ); // breaks my application for some reason
+	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_vktrace" ); // breaks my application for some reason at instance initialisation
 	_mWantedInstanceLayers.push_back( "VK_LAYER_NV_optimus" );
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_RENDERDOC_Capture" ); // fix pipeline and this should work with renderdoc
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_VALVE_steam_overlay" );
-	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_standard_validation" ); // additional core validation - useful
+	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_standard_validation" ); // additional error loggings
 
 	// Declare a lists of all extensions we want to feed into our Vulkan Instance and Device
 	_mWantedInstanceExtensions.push_back( VK_KHR_SURFACE_EXTENSION_NAME );
@@ -73,6 +73,17 @@ VK_Renderer::~VK_Renderer()
 	vkDestroyInstance( _mVkInstance, nullptr );
 
 	cout << "VK_Renderer destructor completed" << endl;
+}
+
+
+bool VK_Renderer::IfVKErrorPrintMSG( VkResult VkState, string output )
+{
+	if( VkState != VK_SUCCESS )
+	{
+		cout << endl << output << endl;
+		return true;
+	}
+	return false;
 }
 
 
@@ -323,9 +334,20 @@ VkResult VK_Renderer::InitSwapChain()
 	VkResult returnResult;
 	uint32_t imageCount = 2; // double buffering
 
-	VkSurfaceCapabilitiesKHR surfaceCapabilities = {};
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR( _mPhysicalDevice, _mWindowSurface, &surfaceCapabilities );
-	VkExtent2D surfaceResolution = surfaceCapabilities.currentExtent;
+	uint32_t surfaceFormatsCount;
+	_mDeviceSurfaceFormats = {};
+	returnResult = vkGetPhysicalDeviceSurfaceFormatsKHR( _mPhysicalDevice, _mWindowSurface, &surfaceFormatsCount, &_mDeviceSurfaceFormats );
+	if( IfVKErrorPrintMSG( returnResult, "Couldn't get Device's Surface Format for the Swaph Chain's Create info." ) ) return returnResult;
+
+	uint32_t presentModeCount;
+	_mPresentModeKHR = {};
+	returnResult = vkGetPhysicalDeviceSurfacePresentModesKHR( _mPhysicalDevice, _mWindowSurface, &presentModeCount, &_mPresentModeKHR );
+	if( IfVKErrorPrintMSG( returnResult, "Couldn't get Device's Present Modes for the Swaph Chain's Create info." ) ) return returnResult;
+
+	_mSurfaceCapabilities = {};
+	returnResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR( _mPhysicalDevice, _mWindowSurface, &_mSurfaceCapabilities );
+	if( IfVKErrorPrintMSG( returnResult, "Couldn't get Device's Surface Capabilities for the Swaph Chain's Create info." ) ) return returnResult;
+	VkExtent2D surfaceResolution = _mSurfaceCapabilities.currentExtent;
 	uint32_t width = surfaceResolution.width;
 	uint32_t height = surfaceResolution.height;
 
@@ -333,14 +355,18 @@ VkResult VK_Renderer::InitSwapChain()
 	swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapChainCreateInfo.surface = _mWindowSurface;
 	swapChainCreateInfo.minImageCount = imageCount;
-	swapChainCreateInfo.imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
-	swapChainCreateInfo.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+	//swapChainCreateInfo.imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+	swapChainCreateInfo.imageFormat = _mDeviceSurfaceFormats.format;
+	//swapChainCreateInfo.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+	swapChainCreateInfo.imageColorSpace = _mDeviceSurfaceFormats.colorSpace;
 	swapChainCreateInfo.imageExtent = surfaceResolution;
 	swapChainCreateInfo.imageArrayLayers = 1;
 	swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	swapChainCreateInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-	swapChainCreateInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+	swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	//swapChainCreateInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+	swapChainCreateInfo.presentMode = _mPresentModeKHR;
 	swapChainCreateInfo.clipped = true;
 	swapChainCreateInfo.oldSwapchain = NULL;
 
@@ -368,17 +394,18 @@ VkResult VK_Renderer::InitSwapChain()
 				VkImageViewCreateInfo imageViewCreateInfo = {};
 				imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 				imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D; // render to a 2D image
-				imageViewCreateInfo.format = VK_FORMAT_B8G8R8A8_UNORM; // colour format
+				//imageViewCreateInfo.format = VK_FORMAT_B8G8R8A8_UNORM; // colour format
+				imageViewCreateInfo.image = _mSwapChainImages.at( i );
+				imageViewCreateInfo.format = _mDeviceSurfaceFormats.format;
 				imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
 				imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
 				imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-				imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+				//imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
 				imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 				imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
 				imageViewCreateInfo.subresourceRange.levelCount = 1;
 				imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
 				imageViewCreateInfo.subresourceRange.layerCount = 1;
-				imageViewCreateInfo.image = _mSwapChainImages.at( i );
 
 				returnResult = vkCreateImageView( _mLogicalDevice, &imageViewCreateInfo, NULL, &_mSwapChainImageViews.at( i ) );
 			}
@@ -483,12 +510,16 @@ VkResult VK_Renderer::InitFrameBuffers()
 
 	for( int i = 0; i < 2; i++ )
 	{
+		VkImageView attachments[] = {
+			_mSwapChainImageViews.at( i )
+		};
+
 		VkFramebufferCreateInfo frameBufferCreateInfo = {};
 		frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		frameBufferCreateInfo.pNext = nullptr;
 		frameBufferCreateInfo.renderPass = _mRenderPass;
 		frameBufferCreateInfo.attachmentCount = 1;
-		frameBufferCreateInfo.pAttachments = &_mSwapChainImageViews.at( i );
+		frameBufferCreateInfo.pAttachments = attachments;
 		frameBufferCreateInfo.width = _mWidth;
 		frameBufferCreateInfo.height = _mHeight;
 		frameBufferCreateInfo.layers = 1;
@@ -632,7 +663,7 @@ void VK_Renderer::RenderScene()
 		vkQueueSubmit( _mGraphicsQueue, 1, &submitInfo, renderFence );
 
 		vkWaitForFences( _mLogicalDevice, 1, &renderFence, VK_TRUE, UINT64_MAX );
-		
+
 		vkDestroyFence( _mLogicalDevice, renderFence, nullptr );
 	}
 

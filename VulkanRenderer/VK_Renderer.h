@@ -47,7 +47,7 @@ private:
 	// Shared Variables
 	uint32_t									_mWidth = 1600;
 	uint32_t									_mHeight = 900;
-	uint32_t										_mChainNextImageIndex = 0;
+	uint32_t									_mChainNextImageIndex = 0;
 
 	// Vulkan variables
 	VkApplicationInfo							_mAppInfo;
@@ -63,10 +63,6 @@ private:
 	VkRenderPass								_mRenderPass;						//
 	VkSurfaceKHR								_mWindowSurface;					// The window "Surface" Vulkan will be drawing onto
 
-	// pipeline
-	//VkFence										_mRenderFence;						// Fences off the rest of the CPU program until the GPU has finished rendering
-
-
 	VkSwapchainKHR								_mSwapChainHandle;
 	vector<VkImage>								_mSwapChainImages;					// Every immage needs an image view, conside a struct
 	vector<VkImageView>							_mSwapChainImageViews;
@@ -74,9 +70,15 @@ private:
 	VkExtent2D									_mSwapChainSurfaceResolution;
 	VkFormat									_mSwapChainImageFormat;
 
+	VkSurfaceFormatKHR							_mDeviceSurfaceFormats;
+	VkPresentModeKHR							_mPresentModeKHR;
+	VkSurfaceCapabilitiesKHR					_mSurfaceCapabilities;
+
 
 	// Methods
 	// Vulkan
+	bool										IfVKErrorPrintMSG(VkResult VkState, string output);
+
 	VkResult									InitVulkanDevicesAndRenderer();
 	VkResult									InitInstance();
 	VkResult									ChooseAPhysicalDevice();
