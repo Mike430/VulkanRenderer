@@ -6,8 +6,20 @@ VK_Renderer::VK_Renderer()
 {
 	cout << "VK_Renderer constructor called" << endl;
 
+	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_api_dump" ); // explain everything through the consol as it happens
+	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_core_validation" ); // highly useful
+	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_monitor" );
+	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_object_tracker" ); // tells you have you haven't deleted when cleaning up
+	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_parameter_validation" );
+	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_screenshot" );
 	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_swapchain" );
+	//_mWantedInstanceLayers.push_back( "VK_LAYER_GOOGLE_threading" );
+	//_mWantedInstanceLayers.push_back( "VK_LAYER_GOOGLE_unique_objects" );
+	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_vktrace" ); // breaks my application for some reason
 	_mWantedInstanceLayers.push_back( "VK_LAYER_NV_optimus" );
+	//_mWantedInstanceLayers.push_back( "VK_LAYER_RENDERDOC_Capture" ); // fix pipeline and this should work with renderdoc
+	//_mWantedInstanceLayers.push_back( "VK_LAYER_VALVE_steam_overlay" );
+	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_standard_validation" ); // additional core validation - useful
 
 	// Declare a lists of all extensions we want to feed into our Vulkan Instance and Device
 	_mWantedInstanceExtensions.push_back( VK_KHR_SURFACE_EXTENSION_NAME );
@@ -48,8 +60,14 @@ VK_Renderer::~VK_Renderer()
 	{
 		vkDestroyImageView( _mLogicalDevice, _mSwapChainImageViews[ i ], nullptr );
 	}
-	vkDestroySwapchainKHR( _mLogicalDevice, _mSwapChainHandle, nullptr );
+	for( size_t i = 0; i < _mSwapChainFrameBuffers.size(); i++ )
+	{
+		vkDestroyFramebuffer( _mLogicalDevice, _mSwapChainFrameBuffers.at( i ), nullptr );
+	}
 
+	vkDestroySwapchainKHR( _mLogicalDevice, _mSwapChainHandle, nullptr );
+	vkDestroyRenderPass( _mLogicalDevice, _mRenderPass, nullptr );
+	vkDestroyCommandPool( _mLogicalDevice, _mGraphicsQueueCmdPool, nullptr );
 	vkDestroySurfaceKHR( _mVkInstance, _mWindowSurface, nullptr );
 	vkDestroyDevice( _mLogicalDevice, nullptr );
 	vkDestroyInstance( _mVkInstance, nullptr );
@@ -68,24 +86,17 @@ VkResult VK_Renderer::InitVulkanDevicesAndRenderer()
 	if( VK_SUCCESS != ( returnResult = ChooseAPhysicalDevice() ) )			return returnResult;
 	if( VK_SUCCESS != ( returnResult = InitLogicalDevice() ) )				return returnResult;
 
-	if( !glfwInit() )
+	if( glfwInit() )
+	{
+		CreateGLFWWindow();
+	}
+	else
 	{
 		cout << "GLFW couldn't be initialised" << endl;
 		return VK_ERROR_EXTENSION_NOT_PRESENT;
 	}
-	else
-	{
-		if( glfwVulkanSupported() )
-		{
-			if( VK_SUCCESS != ( returnResult = CreateVulkanWindowSurface() ) ) return returnResult;
-		}
-		else
-		{
-			cout << "Vulkan is NOT available to GLFW" << endl;
-			return VK_ERROR_EXTENSION_NOT_PRESENT;
-		}
-	}
 
+	if( VK_SUCCESS != ( returnResult = InitialiseWindowSurface() ) )	return returnResult;
 	if( VK_SUCCESS != ( returnResult = InitVulkanGraphicalPipeline() ) )	return returnResult;
 
 	return returnResult;
@@ -108,15 +119,18 @@ VkResult VK_Renderer::InitInstance()
 	uint32_t layerCount;
 	vkEnumerateInstanceLayerProperties( &layerCount, nullptr );
 	cout << "We have " << layerCount << " layers available to the instance. They are:" << endl;
-	vector<VkLayerProperties> vkLayerProps(layerCount);
+	vector<VkLayerProperties> vkLayerProps( layerCount );
 	vkEnumerateInstanceLayerProperties( &layerCount, vkLayerProps.data() );
 
 	vector<const char*> avalableNames;
-	for( int i = 0; i < vkLayerProps.size(); i++ )
+	if( _mValidationLayerOn )
 	{
-		avalableNames.push_back( vkLayerProps.at( i ).layerName );
+		for( int i = 0; i < vkLayerProps.size(); i++ )
+		{
+			avalableNames.push_back( vkLayerProps.at( i ).layerName );
+		}
+		_mTurnedOnInstanceLayers = FindCommonCStrings( _mWantedInstanceLayers, avalableNames );
 	}
-	_mTurnedOnInstanceLayers = FindCommonCStrings(_mWantedInstanceLayers, avalableNames);
 
 	// Extensions
 	uint32_t extensionCount;
@@ -135,8 +149,8 @@ VkResult VK_Renderer::InitInstance()
 
 	_mInstanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	_mInstanceCreateInfo.pApplicationInfo = &_mAppInfo;
-	_mInstanceCreateInfo.enabledLayerCount = _mTurnedOnInstanceLayers.size();
-	_mInstanceCreateInfo.ppEnabledLayerNames = _mTurnedOnInstanceLayers.data();
+	_mInstanceCreateInfo.enabledLayerCount = _mValidationLayerOn ? _mTurnedOnInstanceLayers.size() : 0;
+	_mInstanceCreateInfo.ppEnabledLayerNames = _mValidationLayerOn ? _mTurnedOnInstanceLayers.data() : nullptr;
 	_mInstanceCreateInfo.enabledExtensionCount = _mTurnedOnInstanceExtensions.size();
 	_mInstanceCreateInfo.ppEnabledExtensionNames = _mTurnedOnInstanceExtensions.data();
 
@@ -492,22 +506,33 @@ VkResult VK_Renderer::InitFrameBuffers()
 
 
 // Needs to be made a part of the core game engine as the renderer shouldn't have responcibility over window and input management.
-VkResult VK_Renderer::CreateVulkanWindowSurface()
+void VK_Renderer::CreateGLFWWindow()
 {
 	// Creates a window "without a context" - Go here to find out more: http://www.glfw.org/docs/latest/context_guide.html#context_less
 	glfwWindowHint( GLFW_CLIENT_API, GLFW_NO_API );
 	_mWindow = glfwCreateWindow( _mWidth, _mHeight, "Vulkan Renderer", NULL, NULL );
 
-	// Creating a Vulkan window surface
-	VkResult returnResult = glfwCreateWindowSurface( _mVkInstance, _mWindow, NULL, &_mWindowSurface );
-	if( returnResult != VK_SUCCESS )
-	{
-		cout << "Could not create a window in which to draw. VK_ERROR: " << returnResult << endl;
-	}
-
 	glfwMakeContextCurrent( _mWindow );
 	glfwSetInputMode( _mWindow, GLFW_STICKY_KEYS, VK_TRUE );
 	glfwSetInputMode( _mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL );
+}
+
+VkResult VK_Renderer::InitialiseWindowSurface()
+{
+	// Creating a Vulkan window surface
+	VkBool32 state;
+	VkResult returnResult;
+	returnResult = glfwCreateWindowSurface( _mVkInstance, _mWindow, NULL, &_mWindowSurface );
+	if( returnResult != VK_SUCCESS )
+	{
+		cout << "Could not create a surface in which to draw. VK_ERROR: " << returnResult << endl;
+	}
+
+	returnResult = vkGetPhysicalDeviceSurfaceSupportKHR( _mPhysicalDevice, _mGraphicsQueueDeviceIndex, _mWindowSurface, &state );
+	if( returnResult != VK_SUCCESS )
+	{
+		cout << "Could not Validate surface with GPU format. VK_ERROR: " << returnResult << endl;
+	}
 
 	return returnResult;
 }
@@ -520,20 +545,30 @@ VkResult VK_Renderer::CreateVulkanWindowSurface()
 void VK_Renderer::GameLoop()
 {
 	//glfwSetWindowCloseCallback( _mWindow, window_close_callback );
+	RenderScene();
 	while( glfwGetKey( _mWindow, GLFW_KEY_ESCAPE ) != GLFW_PRESS && glfwWindowShouldClose( _mWindow ) == 0 )
 	{
-		//render( _mWindow );
-		RenderScene();
-		//glfwSwapBuffers( _mWindow );
+		//RenderScene();
 		glfwPollEvents();
 	}
-	vkDeviceWaitIdle(_mLogicalDevice);
+	vkDeviceWaitIdle( _mLogicalDevice );
 }
 
 
 void VK_Renderer::RenderScene()
 {
-	vkAcquireNextImageKHR( _mLogicalDevice, _mSwapChainHandle, UINT64_MAX, VK_NULL_HANDLE, VK_NULL_HANDLE, &_mChainNextImageIndex );
+	cout << endl << endl << "NEXT_RENDER_PASS" << endl;
+
+
+	// Fence will only allow a buffer swap when the GPU is finished drawing.
+	// Fence must be reset every frame
+	VkFence renderFence;
+	VkFenceCreateInfo fenceCreateInfo = {};
+	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	vkCreateFence( _mLogicalDevice, &fenceCreateInfo, NULL, &renderFence );
+
+
+	vkAcquireNextImageKHR( _mLogicalDevice, _mSwapChainHandle, UINT64_MAX, VK_NULL_HANDLE, renderFence, &_mChainNextImageIndex );
 	cout << _mChainNextImageIndex;
 	//_mChainNextImageIndex == 0 ? _mChainNextImageIndex = 1 : _mChainNextImageIndex = 0;
 
@@ -543,7 +578,7 @@ void VK_Renderer::RenderScene()
 
 	vkBeginCommandBuffer( _mGraphicsQueueCmdBuffer, &newBufferInfo );
 	{
-		VkClearValue cv = {0.5f, 0.5f, 0.5f, 1.0f};
+		VkClearValue cv = { 1.0f, 0.25f, 0.25f, 1.0f };
 		cv.depthStencil.depth = 0.0f;
 		cv.depthStencil.stencil = 0.0f;
 		VkClearValue clearImageValue[] =
@@ -580,11 +615,7 @@ void VK_Renderer::RenderScene()
 
 		vkCmdEndRenderPass( _mGraphicsQueueCmdBuffer );
 
-		// Fence will only allow a buffer swap when the GPU is finished drawing.
-		VkFence renderFence;
-		VkFenceCreateInfo fenceCreateInfo = {};
-		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		vkCreateFence( _mLogicalDevice, &fenceCreateInfo, NULL, &renderFence );
+
 
 		// for submitting the Fence to the Queue
 		VkSubmitInfo submitInfo = {};
@@ -601,8 +632,9 @@ void VK_Renderer::RenderScene()
 		vkQueueSubmit( _mGraphicsQueue, 1, &submitInfo, renderFence );
 
 		vkWaitForFences( _mLogicalDevice, 1, &renderFence, VK_TRUE, UINT64_MAX );
-
-		vkDestroyFence( _mLogicalDevice, renderFence, NULL );
-		//cout << "yippie" << endl;
+		
+		vkDestroyFence( _mLogicalDevice, renderFence, nullptr );
 	}
+
+	//vkEndCommandBuffer( _mGraphicsQueueCmdBuffer );
 }

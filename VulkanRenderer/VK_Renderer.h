@@ -26,6 +26,12 @@ using namespace Utilities;
 class VK_Renderer
 {
 private:
+#ifdef NDEBUG
+	const bool _mValidationLayerOn = false;
+#else
+	const bool _mValidationLayerOn = true;
+#endif
+
 	// C strings for searching in Vulkan.h
 	vector<const char*>							_mWantedInstanceLayers;
 	vector<const char*>							_mWantedInstanceExtensions;
@@ -57,6 +63,9 @@ private:
 	VkRenderPass								_mRenderPass;						//
 	VkSurfaceKHR								_mWindowSurface;					// The window "Surface" Vulkan will be drawing onto
 
+	// pipeline
+	//VkFence										_mRenderFence;						// Fences off the rest of the CPU program until the GPU has finished rendering
+
 
 	VkSwapchainKHR								_mSwapChainHandle;
 	vector<VkImage>								_mSwapChainImages;					// Every immage needs an image view, conside a struct
@@ -79,7 +88,8 @@ private:
 	VkResult									InitFrameBuffers();
 
 	// GLFW
-	VkResult									CreateVulkanWindowSurface();
+	void										CreateGLFWWindow();
+	VkResult									InitialiseWindowSurface();
 public:
 	VK_Renderer();
 	~VK_Renderer();
