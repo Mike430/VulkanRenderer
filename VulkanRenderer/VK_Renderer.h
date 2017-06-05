@@ -18,10 +18,12 @@
 #include <string.h>
 
 #include "Utilities.h"
+#include "GraphicalUtilities.h"
 
 // namespaces
 using namespace std;
 using namespace Utilities;
+using namespace GraphicalUtilities;
 
 class VK_Renderer
 {
@@ -40,6 +42,8 @@ private:
 	vector<const char*>							_mTurnedOnInstanceLayers;
 	vector<const char*>							_mTurnedOnInstanceExtensions;
 	vector<const char*>							_mTurnedOnDeviceExtensions;
+
+	vector<vector<vertex>>						_mVertexBufferData;
 
 	// GLFW Variables
 	GLFWwindow*									_mWindow;
@@ -74,6 +78,8 @@ private:
 	VkPresentModeKHR							_mPresentModeKHR;
 	VkSurfaceCapabilitiesKHR					_mSurfaceCapabilities;
 
+	VkBuffer									_mVertexBuffer;
+
 
 	// Methods
 	// Vulkan
@@ -88,6 +94,8 @@ private:
 	VkResult									InitSwapChain();
 	VkResult									InitGraphicsQueue();
 	VkResult									InitFrameBuffers();
+
+	VkResult									InitVertexBuffer();
 
 	// GLFW
 	void										CreateGLFWWindow();

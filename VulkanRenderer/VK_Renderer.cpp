@@ -325,6 +325,8 @@ VkResult VK_Renderer::InitVulkanGraphicalPipeline()
 	if( VK_SUCCESS != ( returnResult = InitSwapChain() ) )				return returnResult;
 	if( VK_SUCCESS != ( returnResult = InitGraphicsQueue() ) )			return returnResult;
 	if( VK_SUCCESS != ( returnResult = InitFrameBuffers() ) )			return returnResult;
+	if( VK_SUCCESS != ( returnResult = InitVertexBuffer() ) )			return returnResult;
+
 	return returnResult;
 }
 
@@ -531,6 +533,79 @@ VkResult VK_Renderer::InitFrameBuffers()
 			cout << "FrameBuffer " << i << " was not initialised properly" << endl;
 		}
 	}
+
+	return returnResult;
+}
+
+
+VkResult VK_Renderer::InitVertexBuffer()
+{
+	VkResult returnResult;
+
+	vertex vert1 = {};
+	vert1.pos.x = 1.0f;
+	vert1.colour.r = 1.0f;
+	vertex vert2 = {};
+	vert2.pos.x = -1.0f;
+	vert2.colour.g = 1.0f;
+	vertex vert3 = {};
+	vert3.pos.z = 1.0f;
+	vert3.colour.b = 1.0f;
+	vector<vertex> mesh1;
+	mesh1.push_back( vert1 );
+	mesh1.push_back( vert2 );
+	mesh1.push_back( vert3 );
+	_mVertexBufferData.push_back( mesh1 );
+
+
+	VkBufferCreateInfo vBufferCreateInfo = {};
+	vBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	vBufferCreateInfo.size = sizeof( _mVertexBufferData );
+	vBufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	vBufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	vBufferCreateInfo.queueFamilyIndexCount = 0;
+	vBufferCreateInfo.pQueueFamilyIndices = nullptr;
+
+	returnResult = vkCreateBuffer( _mLogicalDevice, &vBufferCreateInfo, nullptr, &_mVertexBuffer );
+	if( IfVKErrorPrintMSG( returnResult, "Could not initialise a vertexBuffer complete with data." ) ) return returnResult;
+
+	VkMemoryRequirements vBufferMemReq;
+	vkGetBufferMemoryRequirements( _mLogicalDevice, _mVertexBuffer, &vBufferMemReq );
+	VkPhysicalDeviceMemoryProperties memProps;
+	vkGetPhysicalDeviceMemoryProperties( _mPhysicalDevice, &memProps );
+
+	VkMemoryAllocateInfo vBufferAllocInfo = {};
+	vBufferAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	vBufferAllocInfo.pNext = nullptr;
+	vBufferAllocInfo.allocationSize = vBufferMemReq.size;
+
+	for( uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; i++ )
+	{
+		VkMemoryType memType = memProps.memoryTypes[ i ];
+
+		if( memType.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT )
+		{
+			vBufferAllocInfo.memoryTypeIndex = i;
+		}
+	}
+
+	VkDeviceMemory vBufferMemory;
+	returnResult = vkAllocateMemory( _mLogicalDevice, &vBufferAllocInfo, nullptr, &vBufferMemory );
+	if( IfVKErrorPrintMSG( returnResult, "Couldn't create memory for the Vertex Buffer." ) ) return returnResult;
+
+	void* mappedData;
+	//returnResult = vkMapMemory( _mLogicalDevice, vBufferMemory, 0, VK_WHOLE_SIZE, 0, &mappedData );
+	returnResult = vkMapMemory( _mLogicalDevice, vBufferMemory, 0, vBufferCreateInfo.size, 0, &mappedData );
+	if( IfVKErrorPrintMSG( returnResult, "Could not map the Vertex Buffer Memory." ) ) return returnResult;
+
+	memcpy( mappedData, _mVertexBufferData.data(), ( size_t ) vBufferCreateInfo.size );
+
+	vkUnmapMemory( _mLogicalDevice, vBufferMemory );
+	returnResult = vkBindBufferMemory( _mLogicalDevice, _mVertexBuffer, vBufferMemory, 0 );
+	IfVKErrorPrintMSG( returnResult, "Could not bind the Vertex Buffer to the GPU" );
+
+	returnResult = vkBindBufferMemory( _mLogicalDevice, _mVertexBuffer, vBufferMemory, 0 );
+	if( IfVKErrorPrintMSG( returnResult, "Could not bind buffer to GPU." ) );
 
 	return returnResult;
 }

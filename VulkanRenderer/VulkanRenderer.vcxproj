@@ -133,6 +133,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="GraphicalUtilities.h" />
     <ClInclude Include="Utilities.h" />
     <ClInclude Include="VK_Renderer.h" />
   </ItemGroup>
