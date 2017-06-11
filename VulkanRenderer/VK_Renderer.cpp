@@ -4,17 +4,18 @@
 
 VK_Renderer::VK_Renderer()
 {
+	_mChainNextImageIndex = 1;
 	cout << "VK_Renderer constructor called" << endl;
 
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_api_dump" ); // Doesn't show errors, just shows the evolution of your vulkan app by dumping every key change that occures
 	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_core_validation" ); // Logs every error that occures
-	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_monitor" );
+	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_monitor" );
 	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_object_tracker" ); // tells you have you haven't deleted when cleaning up
-	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_parameter_validation" );
-	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_screenshot" );
+	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_parameter_validation" );
+	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_screenshot" );
 	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_swapchain" ); // specifically targets swapchain issues
-	//_mWantedInstanceLayers.push_back( "VK_LAYER_GOOGLE_threading" );
-	//_mWantedInstanceLayers.push_back( "VK_LAYER_GOOGLE_unique_objects" );
+	_mWantedInstanceLayers.push_back( "VK_LAYER_GOOGLE_threading" );
+	_mWantedInstanceLayers.push_back( "VK_LAYER_GOOGLE_unique_objects" );
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_vktrace" ); // breaks my application for some reason at instance initialisation
 	_mWantedInstanceLayers.push_back( "VK_LAYER_NV_optimus" );
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_RENDERDOC_Capture" ); // fix pipeline and this should work with renderdoc
@@ -56,17 +57,17 @@ VK_Renderer::~VK_Renderer()
 	glfwDestroyWindow( _mWindow ); // Can use delete because terminate alters all windows
 
 	// Shutdown Vulkan next
-	for( size_t i = 0; i < _mSwapChainImageViews.size(); i++ )
+	for( auto i = 0; i < _mSwapChainSize; i++ )
 	{
 		vkDestroyImageView( _mLogicalDevice, _mSwapChainImageViews[ i ], nullptr );
-	}
-	for( size_t i = 0; i < _mSwapChainFrameBuffers.size(); i++ )
-	{
 		vkDestroyFramebuffer( _mLogicalDevice, _mSwapChainFrameBuffers.at( i ), nullptr );
+		vkDestroyFence( _mLogicalDevice, _mSwapChainRenderFences.at( i ), nullptr );
 	}
 
+	vkFreeMemory( _mLogicalDevice, _mVertexBufferMemory, nullptr );
+	vkDestroyBuffer( _mLogicalDevice, _mVertexBuffer, nullptr );
 	vkDestroySwapchainKHR( _mLogicalDevice, _mSwapChainHandle, nullptr );
-	vkDestroyRenderPass( _mLogicalDevice, _mRenderPass, nullptr );
+	vkDestroyRenderPass( _mLogicalDevice, _mRenderPass, nullptr ); // Destroys the swap chain images
 	vkDestroyCommandPool( _mLogicalDevice, _mGraphicsQueueCmdPool, nullptr );
 	vkDestroySurfaceKHR( _mVkInstance, _mWindowSurface, nullptr );
 	vkDestroyDevice( _mLogicalDevice, nullptr );
@@ -136,7 +137,7 @@ VkResult VK_Renderer::InitInstance()
 	vector<const char*> avalableNames;
 	if( _mValidationLayerOn )
 	{
-		for( int i = 0; i < vkLayerProps.size(); i++ )
+		for( unsigned i = 0; i < vkLayerProps.size(); i++ )
 		{
 			avalableNames.push_back( vkLayerProps.at( i ).layerName );
 		}
@@ -151,7 +152,7 @@ VkResult VK_Renderer::InitInstance()
 	vkEnumerateInstanceExtensionProperties( nullptr, &extensionCount, vkInstanceExtensionProps.data() );
 
 	avalableNames.clear();
-	for( int i = 0; i < vkInstanceExtensionProps.size(); i++ )
+	for( unsigned i = 0; i < vkInstanceExtensionProps.size(); i++ )
 	{
 		avalableNames.push_back( vkInstanceExtensionProps.at( i ).extensionName );
 	}
@@ -286,7 +287,7 @@ VkResult VK_Renderer::InitLogicalDevice()
 
 
 	vector<const char*> avalableNames;
-	for( int i = 0; i < vkDeviceExtensionProps.size(); i++ )
+	for( unsigned i = 0; i < vkDeviceExtensionProps.size(); i++ )
 	{
 		avalableNames.push_back( vkDeviceExtensionProps.at( i ).extensionName );
 	}
@@ -325,6 +326,7 @@ VkResult VK_Renderer::InitVulkanGraphicalPipeline()
 	if( VK_SUCCESS != ( returnResult = InitSwapChain() ) )				return returnResult;
 	if( VK_SUCCESS != ( returnResult = InitGraphicsQueue() ) )			return returnResult;
 	if( VK_SUCCESS != ( returnResult = InitFrameBuffers() ) )			return returnResult;
+	if( VK_SUCCESS != ( returnResult = InitRenderFences() ) )			return returnResult;
 	if( VK_SUCCESS != ( returnResult = InitVertexBuffer() ) )			return returnResult;
 
 	return returnResult;
@@ -334,7 +336,6 @@ VkResult VK_Renderer::InitVulkanGraphicalPipeline()
 VkResult VK_Renderer::InitSwapChain()
 {
 	VkResult returnResult;
-	uint32_t imageCount = 2; // double buffering
 
 	uint32_t surfaceFormatsCount;
 	_mDeviceSurfaceFormats = {};
@@ -356,10 +357,8 @@ VkResult VK_Renderer::InitSwapChain()
 	VkSwapchainCreateInfoKHR swapChainCreateInfo = {};
 	swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapChainCreateInfo.surface = _mWindowSurface;
-	swapChainCreateInfo.minImageCount = imageCount;
-	//swapChainCreateInfo.imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+	swapChainCreateInfo.minImageCount = _mSwapChainSize;
 	swapChainCreateInfo.imageFormat = _mDeviceSurfaceFormats.format;
-	//swapChainCreateInfo.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
 	swapChainCreateInfo.imageColorSpace = _mDeviceSurfaceFormats.colorSpace;
 	swapChainCreateInfo.imageExtent = surfaceResolution;
 	swapChainCreateInfo.imageArrayLayers = 1;
@@ -367,7 +366,6 @@ VkResult VK_Renderer::InitSwapChain()
 	swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	swapChainCreateInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 	swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	//swapChainCreateInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 	swapChainCreateInfo.presentMode = _mPresentModeKHR;
 	swapChainCreateInfo.clipped = true;
 	swapChainCreateInfo.oldSwapchain = NULL;
@@ -379,30 +377,29 @@ VkResult VK_Renderer::InitSwapChain()
 		uint32_t newImageCount;
 		vkGetSwapchainImagesKHR( _mLogicalDevice, _mSwapChainHandle, &newImageCount, nullptr );
 
-		if( imageCount != newImageCount )
+		if( _mSwapChainSize != newImageCount )
 		{
-			cout << "ERROR: shift in image count from " << imageCount << " to " << newImageCount << endl;
+			cout << "ERROR: shift in image count from " << _mSwapChainSize << " to " << newImageCount << endl;
 			return VK_ERROR_VALIDATION_FAILED_EXT;
 		}
 
-		_mSwapChainImages.resize( imageCount );
-		_mSwapChainImageViews.resize( imageCount );
-		returnResult = vkGetSwapchainImagesKHR( _mLogicalDevice, _mSwapChainHandle, &imageCount, _mSwapChainImages.data() );
+		_mSwapChainImages.resize( _mSwapChainSize );
+		_mSwapChainImageViews.resize( _mSwapChainSize );
+		returnResult = vkGetSwapchainImagesKHR( _mLogicalDevice, _mSwapChainHandle, &newImageCount, _mSwapChainImages.data() );
 
 		if( returnResult == VK_SUCCESS )
 		{
-			for( unsigned i = 0; i < imageCount; i++ )
+			for( auto i = 0; i < _mSwapChainSize; i++ )
 			{
 				VkImageViewCreateInfo imageViewCreateInfo = {};
 				imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 				imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D; // render to a 2D image
-				//imageViewCreateInfo.format = VK_FORMAT_B8G8R8A8_UNORM; // colour format
-				imageViewCreateInfo.image = _mSwapChainImages.at( i );
+				imageViewCreateInfo.image = _mSwapChainImages.at( i ); // passing by reference
 				imageViewCreateInfo.format = _mDeviceSurfaceFormats.format;
 				imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
 				imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
 				imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-				//imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+				imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
 				imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 				imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
 				imageViewCreateInfo.subresourceRange.levelCount = 1;
@@ -473,7 +470,7 @@ VkResult VK_Renderer::InitFrameBuffers()
 	VkResult returnResult = VK_SUCCESS;
 
 	VkAttachmentDescription pass[ 1 ] = {};
-	pass[ 0 ].format = VK_FORMAT_B8G8R8_UNORM;
+	pass[ 0 ].format = _mDeviceSurfaceFormats.format; // needs the same format as what it will render to which is equal to what what the graphics card is compatible with.
 	pass[ 0 ].samples = VK_SAMPLE_COUNT_1_BIT; // render pixels multiple times
 	pass[ 0 ].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	pass[ 0 ].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -508,9 +505,9 @@ VkResult VK_Renderer::InitFrameBuffers()
 	}
 	cout << "Render pass created" << endl;
 
-	_mSwapChainFrameBuffers.resize( 2 );
+	_mSwapChainFrameBuffers.resize( _mSwapChainSize );
 
-	for( int i = 0; i < 2; i++ )
+	for( auto i = 0; i < _mSwapChainSize; i++ )
 	{
 		VkImageView attachments[] = {
 			_mSwapChainImageViews.at( i )
@@ -519,7 +516,7 @@ VkResult VK_Renderer::InitFrameBuffers()
 		VkFramebufferCreateInfo frameBufferCreateInfo = {};
 		frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		frameBufferCreateInfo.pNext = nullptr;
-		frameBufferCreateInfo.renderPass = _mRenderPass;
+		frameBufferCreateInfo.renderPass = _mRenderPass; // parsing by reference
 		frameBufferCreateInfo.attachmentCount = 1;
 		frameBufferCreateInfo.pAttachments = attachments;
 		frameBufferCreateInfo.width = _mWidth;
@@ -532,6 +529,23 @@ VkResult VK_Renderer::InitFrameBuffers()
 		{
 			cout << "FrameBuffer " << i << " was not initialised properly" << endl;
 		}
+	}
+
+	return returnResult;
+}
+
+
+VkResult VK_Renderer::InitRenderFences()
+{
+	VkResult returnResult;
+	VkFenceCreateInfo fenceCreateInfo = {};
+	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+
+	_mSwapChainRenderFences.resize( _mSwapChainSize );
+	for( auto i = 0; i < _mSwapChainSize; i++ )
+	{
+		returnResult = vkCreateFence( _mLogicalDevice, &fenceCreateInfo, NULL, &_mSwapChainRenderFences.at( i ) );
+		IfVKErrorPrintMSG( returnResult, "Fence " + to_string( i ) + " Faled to be initialised" );
 	}
 
 	return returnResult;
@@ -579,7 +593,7 @@ VkResult VK_Renderer::InitVertexBuffer()
 	vBufferAllocInfo.pNext = nullptr;
 	vBufferAllocInfo.allocationSize = vBufferMemReq.size;
 
-	for( uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; i++ )
+	for( auto i = 0; i < VK_MAX_MEMORY_TYPES; i++ )
 	{
 		VkMemoryType memType = memProps.memoryTypes[ i ];
 
@@ -589,26 +603,24 @@ VkResult VK_Renderer::InitVertexBuffer()
 		}
 	}
 
-	VkDeviceMemory vBufferMemory;
-	returnResult = vkAllocateMemory( _mLogicalDevice, &vBufferAllocInfo, nullptr, &vBufferMemory );
+
+	returnResult = vkAllocateMemory( _mLogicalDevice, &vBufferAllocInfo, nullptr, &_mVertexBufferMemory );
 	if( IfVKErrorPrintMSG( returnResult, "Couldn't create memory for the Vertex Buffer." ) ) return returnResult;
 
 	void* mappedData;
 	//returnResult = vkMapMemory( _mLogicalDevice, vBufferMemory, 0, VK_WHOLE_SIZE, 0, &mappedData );
-	returnResult = vkMapMemory( _mLogicalDevice, vBufferMemory, 0, vBufferCreateInfo.size, 0, &mappedData );
+	returnResult = vkMapMemory( _mLogicalDevice, _mVertexBufferMemory, 0, vBufferCreateInfo.size, 0, &mappedData );
 	if( IfVKErrorPrintMSG( returnResult, "Could not map the Vertex Buffer Memory." ) ) return returnResult;
 
 	memcpy( mappedData, _mVertexBufferData.data(), ( size_t ) vBufferCreateInfo.size );
 
-	vkUnmapMemory( _mLogicalDevice, vBufferMemory );
-	returnResult = vkBindBufferMemory( _mLogicalDevice, _mVertexBuffer, vBufferMemory, 0 );
+	vkUnmapMemory( _mLogicalDevice, _mVertexBufferMemory );
+	returnResult = vkBindBufferMemory( _mLogicalDevice, _mVertexBuffer, _mVertexBufferMemory, 0 );
 	IfVKErrorPrintMSG( returnResult, "Could not bind the Vertex Buffer to the GPU" );
-
-	returnResult = vkBindBufferMemory( _mLogicalDevice, _mVertexBuffer, vBufferMemory, 0 );
-	if( IfVKErrorPrintMSG( returnResult, "Could not bind buffer to GPU." ) );
 
 	return returnResult;
 }
+
 
 
 // Needs to be made a part of the core game engine as the renderer shouldn't have responcibility over window and input management.
@@ -622,6 +634,7 @@ void VK_Renderer::CreateGLFWWindow()
 	glfwSetInputMode( _mWindow, GLFW_STICKY_KEYS, VK_TRUE );
 	glfwSetInputMode( _mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL );
 }
+
 
 VkResult VK_Renderer::InitialiseWindowSurface()
 {
@@ -651,10 +664,10 @@ VkResult VK_Renderer::InitialiseWindowSurface()
 void VK_Renderer::GameLoop()
 {
 	//glfwSetWindowCloseCallback( _mWindow, window_close_callback );
-	RenderScene();
+	//RenderScene();
 	while( glfwGetKey( _mWindow, GLFW_KEY_ESCAPE ) != GLFW_PRESS && glfwWindowShouldClose( _mWindow ) == 0 )
 	{
-		//RenderScene();
+		RenderScene();
 		glfwPollEvents();
 	}
 	vkDeviceWaitIdle( _mLogicalDevice );
@@ -665,18 +678,11 @@ void VK_Renderer::RenderScene()
 {
 	cout << endl << endl << "NEXT_RENDER_PASS" << endl;
 
-
-	// Fence will only allow a buffer swap when the GPU is finished drawing.
-	// Fence must be reset every frame
-	VkFence renderFence;
-	VkFenceCreateInfo fenceCreateInfo = {};
-	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	vkCreateFence( _mLogicalDevice, &fenceCreateInfo, NULL, &renderFence );
-
-
-	vkAcquireNextImageKHR( _mLogicalDevice, _mSwapChainHandle, UINT64_MAX, VK_NULL_HANDLE, renderFence, &_mChainNextImageIndex );
+	//UINT_MAX
+	//UINT64_MAX
+	//vkAcquireNextImageKHR( _mLogicalDevice, _mSwapChainHandle, UINT64_MAX, VK_NULL_HANDLE, _mSwapChainRenderFences.at(_mChainNextImageIndex), &_mChainNextImageIndex );
+	_mChainNextImageIndex == 0 ? _mChainNextImageIndex = 1 : _mChainNextImageIndex = 0;
 	cout << _mChainNextImageIndex;
-	//_mChainNextImageIndex == 0 ? _mChainNextImageIndex = 1 : _mChainNextImageIndex = 0;
 
 	VkCommandBufferBeginInfo newBufferInfo = {};
 	newBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -684,18 +690,13 @@ void VK_Renderer::RenderScene()
 
 	vkBeginCommandBuffer( _mGraphicsQueueCmdBuffer, &newBufferInfo );
 	{
-		VkClearValue cv = { 1.0f, 0.25f, 0.25f, 1.0f };
+		VkClearValue cv = { 1.0f, 0.1f, 0.1f, 1.0f };
 		cv.depthStencil.depth = 0.0f;
-		cv.depthStencil.stencil = 0.0f;
+		cv.depthStencil.stencil = (uint32_t) 0.0f;
 		VkClearValue clearImageValue[] =
 		{
 			cv
 		};
-
-		VkRenderPassBeginInfo renderPassBeginInfo = {};
-		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassBeginInfo.renderPass = _mRenderPass;
-		renderPassBeginInfo.framebuffer = _mSwapChainFrameBuffers.at( _mChainNextImageIndex );
 
 		VkOffset2D start;
 		start.x = 0;
@@ -709,13 +710,17 @@ void VK_Renderer::RenderScene()
 		rect.offset = start;
 		rect.extent = dimensions;
 
+		VkRenderPassBeginInfo renderPassBeginInfo = {};
+		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassBeginInfo.renderPass = _mRenderPass;
+		renderPassBeginInfo.framebuffer = _mSwapChainFrameBuffers.at( _mChainNextImageIndex );
 		renderPassBeginInfo.renderArea = rect;
 		renderPassBeginInfo.clearValueCount = 2;
 		renderPassBeginInfo.pClearValues = clearImageValue;
 
 		vkCmdBeginRenderPass( _mGraphicsQueueCmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_END_RANGE );
 
-		// Custom render code goes here
+		// Custom render code starts here
 
 		// Custom render code stops here
 
@@ -734,13 +739,13 @@ void VK_Renderer::RenderScene()
 		submitInfo.signalSemaphoreCount = 0;
 		submitInfo.pSignalSemaphores = VK_NULL_HANDLE;
 
+		vkEndCommandBuffer( _mGraphicsQueueCmdBuffer );
+
 		// submit the all the above work to the GPU queue
-		vkQueueSubmit( _mGraphicsQueue, 1, &submitInfo, renderFence );
+		vkQueueSubmit( _mGraphicsQueue, 1, &submitInfo, _mSwapChainRenderFences.at( _mChainNextImageIndex ) );
 
-		vkWaitForFences( _mLogicalDevice, 1, &renderFence, VK_TRUE, UINT64_MAX );
+		vkWaitForFences( _mLogicalDevice, 1, &_mSwapChainRenderFences.at( _mChainNextImageIndex ), VK_TRUE, UINT64_MAX );
 
-		vkDestroyFence( _mLogicalDevice, renderFence, nullptr );
+		vkResetFences(_mLogicalDevice, 1, &_mSwapChainRenderFences.at( _mChainNextImageIndex ) );
 	}
-
-	//vkEndCommandBuffer( _mGraphicsQueueCmdBuffer );
 }

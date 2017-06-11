@@ -8,10 +8,10 @@ vector<const char*> Utilities::FindCommonCStrings( vector<const char*> wantedLis
 
 	string output = "";
 
-	for( int i = 0; i < avalableList.size(); i++ )
+	for( unsigned i = 0; i < avalableList.size(); i++ )
 	{
 		bool enabled = false;
-		for( int j = 0; j < wantedList.size(); j++ )
+		for( unsigned j = 0; j < wantedList.size(); j++ )
 		{
 			if( strcmp( wantedList.at( j ), avalableList.at( i ) ) == 0 )
 			{

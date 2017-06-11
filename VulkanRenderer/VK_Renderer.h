@@ -33,6 +33,7 @@ private:
 #else
 	const bool _mValidationLayerOn = true;
 #endif
+	const uint8_t _mSwapChainSize = 2;
 
 	// C strings for searching in Vulkan.h
 	vector<const char*>							_mWantedInstanceLayers;
@@ -71,6 +72,7 @@ private:
 	vector<VkImage>								_mSwapChainImages;					// Every immage needs an image view, conside a struct
 	vector<VkImageView>							_mSwapChainImageViews;
 	vector<VkFramebuffer>						_mSwapChainFrameBuffers;
+	vector<VkFence>								_mSwapChainRenderFences;
 	VkExtent2D									_mSwapChainSurfaceResolution;
 	VkFormat									_mSwapChainImageFormat;
 
@@ -79,6 +81,7 @@ private:
 	VkSurfaceCapabilitiesKHR					_mSurfaceCapabilities;
 
 	VkBuffer									_mVertexBuffer;
+	VkDeviceMemory								_mVertexBufferMemory;
 
 
 	// Methods
@@ -94,6 +97,7 @@ private:
 	VkResult									InitSwapChain();
 	VkResult									InitGraphicsQueue();
 	VkResult									InitFrameBuffers();
+	VkResult									InitRenderFences();
 
 	VkResult									InitVertexBuffer();
 
@@ -108,21 +112,3 @@ public:
 	void										GameLoop();
 	void										RenderScene();
 };
-
-/*
-struct VkGraphicsCard
-{
-	VkPhysicalDevice							_mPhysicalDevice;
-	VkQueue										_mGraphicsQueue;
-	VkCommandBuffer								_mCommandBuffer;
-	VkCommandPool								_mCommandPool;
-	uint32_t									_graphicsQueueIndex;
-};
-
-struct VkImageSet
-{
-	VkImage										_mImage;
-	VkImageView									_mImageView;
-	VkFramebuffer								_mFrameBuffer;
-};
-*/
