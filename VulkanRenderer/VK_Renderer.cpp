@@ -469,15 +469,15 @@ VkResult VK_Renderer::InitFrameBuffers()
 {
 	VkResult returnResult = VK_SUCCESS;
 
-	VkAttachmentDescription pass[ 1 ] = {};
-	pass[ 0 ].format = _mDeviceSurfaceFormats.format; // needs the same format as what it will render to which is equal to what what the graphics card is compatible with.
-	pass[ 0 ].samples = VK_SAMPLE_COUNT_1_BIT; // render pixels multiple times
-	pass[ 0 ].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	pass[ 0 ].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	pass[ 0 ].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	pass[ 0 ].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	pass[ 0 ].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	pass[ 0 ].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	VkAttachmentDescription colorAttachment = {};
+	colorAttachment.format = _mDeviceSurfaceFormats.format; // needs the same format as what it will render to which is equal to what what the graphics card is compatible with.
+	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT; // render pixels multiple times
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 	VkAttachmentReference attachmentRef = {};
 	attachmentRef.attachment = 0;
@@ -492,7 +492,7 @@ VkResult VK_Renderer::InitFrameBuffers()
 	VkRenderPassCreateInfo renderPassCreateInfo = {};
 	renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassCreateInfo.attachmentCount = 1;
-	renderPassCreateInfo.pAttachments = pass; // An array is pointer with null terminator
+	renderPassCreateInfo.pAttachments = &colorAttachment;
 	renderPassCreateInfo.subpassCount = 1;
 	renderPassCreateInfo.pSubpasses = &subPass;
 
@@ -690,17 +690,17 @@ void VK_Renderer::RenderScene()
 
 	vkBeginCommandBuffer( _mGraphicsQueueCmdBuffer, &newBufferInfo );
 	{
-		VkClearValue cv = { 1.0f, 0.1f, 0.1f, 1.0f };
-		cv.depthStencil.depth = 0.0f;
-		cv.depthStencil.stencil = (uint32_t) 0.0f;
-		VkClearValue clearImageValue[] =
-		{
-			cv
-		};
+		VkClearValue cv = {};
+		cv.color.float32[ 0 ] = 1; // R
+		cv.color.float32[ 1 ] = 0; // G
+		cv.color.float32[ 2 ] = 0; // B
+		cv.color.float32[ 3 ] = 1; // A
 
-		VkOffset2D start;
-		start.x = 0;
-		start.y = 0;
+		cv.depthStencil.depth = 1.0f;
+		cv.depthStencil.stencil = ( uint32_t ) 0.0f;
+		VkClearValue clearImageValue[] = { cv };
+
+		VkOffset2D start = {};
 
 		VkExtent2D dimensions;
 		dimensions.height = _mHeight;
@@ -715,7 +715,7 @@ void VK_Renderer::RenderScene()
 		renderPassBeginInfo.renderPass = _mRenderPass;
 		renderPassBeginInfo.framebuffer = _mSwapChainFrameBuffers.at( _mChainNextImageIndex );
 		renderPassBeginInfo.renderArea = rect;
-		renderPassBeginInfo.clearValueCount = 2;
+		renderPassBeginInfo.clearValueCount = 1;
 		renderPassBeginInfo.pClearValues = clearImageValue;
 
 		vkCmdBeginRenderPass( _mGraphicsQueueCmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_END_RANGE );
@@ -746,6 +746,6 @@ void VK_Renderer::RenderScene()
 
 		vkWaitForFences( _mLogicalDevice, 1, &_mSwapChainRenderFences.at( _mChainNextImageIndex ), VK_TRUE, UINT64_MAX );
 
-		vkResetFences(_mLogicalDevice, 1, &_mSwapChainRenderFences.at( _mChainNextImageIndex ) );
+		vkResetFences( _mLogicalDevice, 1, &_mSwapChainRenderFences.at( _mChainNextImageIndex ) );
 	}
 }
