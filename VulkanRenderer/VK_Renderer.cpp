@@ -4,7 +4,8 @@
 
 VK_Renderer::VK_Renderer()
 {
-	_mChainNextImageIndex = 1;
+	_mConsoleHandle = GetStdHandle( STD_OUTPUT_HANDLE );
+	SetConsoleTextAttribute( _mConsoleHandle, 15 );
 	cout << "VK_Renderer constructor called" << endl;
 
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_api_dump" ); // Doesn't show errors, just shows the evolution of your vulkan app by dumping every key change that occures
@@ -36,16 +37,9 @@ VK_Renderer::VK_Renderer()
 	_mWantedDeviceExtensions.push_back( "VK_NV_geometry_shader_passthrough" );
 
 
-	if( InitVulkanAndGLFW() == VK_SUCCESS )
-	{
-		cout << "VK_Renderer constructor complete" << endl;
-		isCorrectlyInitialised = true;
-	}
-	else
-	{
-		cout << "VK_Renderer constructor failed" << endl;
-		isCorrectlyInitialised = false;
-	}
+	IfVKErrorPrintMSG( InitVulkanAndGLFW(),
+					   "Constructor failed.",
+					   "Constructor complete." ) ? isCorrectlyInitialised = false : isCorrectlyInitialised = true;
 }
 
 
@@ -79,15 +73,33 @@ VK_Renderer::~VK_Renderer()
 	cout << "VK_Renderer destructor completed" << endl;
 }
 
-
+// returns true if we threw an error
 bool VK_Renderer::IfVKErrorPrintMSG( VkResult VkState, string output )
 {
-	if( VkState != VK_SUCCESS )
+	if( _mIsDebugBuild )
 	{
-		cout << endl << output << endl;
-		return true;
+		if( VkState != VK_SUCCESS )
+		{
+			SetConsoleTextAttribute( _mConsoleHandle, 12 );
+			cout << endl << _mVkReportPrefix << output << endl;
+			SetConsoleTextAttribute( _mConsoleHandle, 15 );
+		}
 	}
-	return false;
+
+	return VkState != VK_SUCCESS;
+}
+
+// returns true if we threw an error
+bool VK_Renderer::IfVKErrorPrintMSG( VkResult VkState, string errOutput, string successOutput )
+{
+	if( _mIsDebugBuild )
+	{
+		VkState == VK_SUCCESS ? SetConsoleTextAttribute( _mConsoleHandle, 10 ) : SetConsoleTextAttribute( _mConsoleHandle, 12 );
+		cout << endl << _mVkReportPrefix << ( VkState == VK_SUCCESS ? successOutput : errOutput ) << endl;
+		SetConsoleTextAttribute( _mConsoleHandle, 15 );
+	}
+
+	return VkState != VK_SUCCESS;
 }
 
 
@@ -100,7 +112,10 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VK_Renderer::DebugCallback( VkDebugReportFlagsEXT
 														   const char* message,
 														   void* userData )
 {
+	HANDLE console = GetStdHandle( STD_OUTPUT_HANDLE );
+	SetConsoleTextAttribute( console, 14 );
 	cerr << "Debug Callback was called, message reads: " << layerPrefix << " -> " << message << endl;
+	SetConsoleTextAttribute( console, 15 );
 	return VK_FALSE;
 }
 
@@ -151,12 +166,24 @@ VkResult VK_Renderer::InitVulkanRenderer()
 {
 	VkResult returnResult = VK_SUCCESS;
 
-	if( VK_SUCCESS != ( returnResult = InitInstance() ) )					return returnResult;
-	if( VK_SUCCESS != ( returnResult = SetUpDebugCallback() ) )				return returnResult;
-	if( VK_SUCCESS != ( returnResult = ChooseAPhysicalDevice() ) )			return returnResult;
-	if( VK_SUCCESS != ( returnResult = InitLogicalDevice() ) )				return returnResult;
-	if( VK_SUCCESS != ( returnResult = InitialiseWindowSurface() ) )		return returnResult;
-	if( VK_SUCCESS != ( returnResult = InitVulkanGraphicalPipeline() ) )	return returnResult;
+	if( IfVKErrorPrintMSG( InitInstance(),
+						   "Failed to initialise instance.",
+						   "Initialised instance." ) )						return returnResult;
+	if( IfVKErrorPrintMSG( SetUpDebugCallback(),
+						   "Failed to setup debug.",
+						   "Initialised debug." ) )							return returnResult;
+	if( IfVKErrorPrintMSG( ChooseAPhysicalDevice(),
+						   "Failed to choose a device.",
+						   "Chose device." ) )								return returnResult;
+	if( IfVKErrorPrintMSG( InitLogicalDevice(),
+						   "Failed to initialise device.",
+						   "Initialised device." ) )						return returnResult;
+	if( IfVKErrorPrintMSG( InitialiseWindowSurface(),
+						   "Failed to initialise surface.",
+						   "Initialised surface." ) )						return returnResult;
+	if( IfVKErrorPrintMSG( InitVulkanGraphicalPipeline(),
+						   "Failed to initialise pipeline.",
+						   "Initialised pipeline." ) )						return returnResult;
 
 	return returnResult;
 }
@@ -375,17 +402,12 @@ VkResult VK_Renderer::InitLogicalDevice()
 	deviceCreateInfo.pEnabledFeatures = &requiredFeatures;
 
 
-
 	returnResult = vkCreateDevice( _mPhysicalDevice, &deviceCreateInfo, nullptr, &_mLogicalDevice );
-
-	returnResult == VK_SUCCESS ? cout << "It worked\n\n" : cout << "It did not work\n\n";
 
 	vkGetDeviceQueue( _mLogicalDevice, _mGraphicsQueueDeviceIndex, 0, &_mGraphicsQueue );
 
 	return returnResult;
 }
-
-
 
 
 VkResult VK_Renderer::InitVulkanGraphicalPipeline()

@@ -6,6 +6,10 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #endif
 
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING
+#endif
+
 
 #include "vulkan/vulkan.h"
 #include "GLFW/glfw3.h"
@@ -16,6 +20,7 @@
 #include <vector>
 #include <stdio.h>
 #include <string.h>
+#include <windows.h>
 
 #include "Utilities.h"
 #include "GraphicalUtilities.h"
@@ -34,7 +39,20 @@ private:
 	const bool _mIsDebugBuild = true;
 #endif
 	const uint8_t _mSwapChainSize = 2;
+	const string _mVkReportPrefix = "Vk_Renderer Report: ";
 
+	// Windows
+	HANDLE _mConsoleHandle;
+
+	// GLFW Variables
+	GLFWwindow*									_mWindow;
+
+	// Shared Variables
+	uint32_t									_mWidth = 1600;
+	uint32_t									_mHeight = 900;
+	uint32_t									_mChainNextImageIndex = 0;
+
+	// Vulkan variables
 	// C strings for searching in Vulkan.h
 	vector<const char*>							_mWantedInstanceLayers;
 	vector<const char*>							_mWantedInstanceExtensions;
@@ -46,15 +64,7 @@ private:
 
 	vector<vector<vertex>>						_mVertexBufferData;
 
-	// GLFW Variables
-	GLFWwindow*									_mWindow;
-
-	// Shared Variables
-	uint32_t									_mWidth = 1600;
-	uint32_t									_mHeight = 900;
-	uint32_t									_mChainNextImageIndex = 0;
-
-	// Vulkan variables
+	// Vulkan's core component objects
 	VkDebugReportCallbackEXT					_mDebugCallbackHandle;
 
 	VkApplicationInfo							_mAppInfo;
@@ -112,7 +122,8 @@ private:
 	VkResult									InitialiseWindowSurface();
 
 	// Custom
-	bool										IfVKErrorPrintMSG( VkResult VkState, string output );
+	bool										IfVKErrorPrintMSG( VkResult VkState, string errOutput );
+	bool										IfVKErrorPrintMSG( VkResult VkState, string errOutput, string successOutput );
 public:
 	VK_Renderer();
 	~VK_Renderer();
