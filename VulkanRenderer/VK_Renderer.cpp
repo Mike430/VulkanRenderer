@@ -24,6 +24,7 @@ VK_Renderer::VK_Renderer()
 
 	// Declare a lists of all extensions we want to feed into our Vulkan Instance and Device
 	_mWantedInstanceExtensions.push_back( VK_KHR_SURFACE_EXTENSION_NAME );
+	_mWantedInstanceExtensions.push_back( VK_EXT_DEBUG_REPORT_EXTENSION_NAME );
 #if defined(VK_USE_PLATFORM_WIN32_KHR) // won't stop x64 builds - it's up to vulkan weather it's used
 	_mWantedInstanceExtensions.push_back( VK_KHR_WIN32_SURFACE_EXTENSION_NAME );
 #endif
@@ -35,7 +36,7 @@ VK_Renderer::VK_Renderer()
 	_mWantedDeviceExtensions.push_back( "VK_NV_geometry_shader_passthrough" );
 
 
-	if( InitVulkanDevicesAndRenderer() == VK_SUCCESS )
+	if( InitVulkanAndGLFW() == VK_SUCCESS )
 	{
 		cout << "VK_Renderer constructor complete" << endl;
 		isCorrectlyInitialised = true;
@@ -52,18 +53,14 @@ VK_Renderer::~VK_Renderer()
 {
 	cout << "VK_Renderer destructor called" << endl;
 
-	// Shutdown GLFW first
-	glfwTerminate(); // window delete cannot be done before glfwTerminate as glfwTerminate cleans windows
-	glfwDestroyWindow( _mWindow ); // Can use delete because terminate alters all windows
 
-	// Shutdown Vulkan next
+	// Shutdown Vulkan
 	for( auto i = 0; i < _mSwapChainSize; i++ )
 	{
 		vkDestroyImageView( _mLogicalDevice, _mSwapChainImageViews[ i ], nullptr );
 		vkDestroyFramebuffer( _mLogicalDevice, _mSwapChainFrameBuffers.at( i ), nullptr );
 		vkDestroyFence( _mLogicalDevice, _mSwapChainRenderFences.at( i ), nullptr );
 	}
-
 	vkFreeMemory( _mLogicalDevice, _mVertexBufferMemory, nullptr );
 	vkDestroyBuffer( _mLogicalDevice, _mVertexBuffer, nullptr );
 	vkDestroySwapchainKHR( _mLogicalDevice, _mSwapChainHandle, nullptr );
@@ -71,7 +68,13 @@ VK_Renderer::~VK_Renderer()
 	vkDestroyCommandPool( _mLogicalDevice, _mGraphicsQueueCmdPool, nullptr );
 	vkDestroySurfaceKHR( _mVkInstance, _mWindowSurface, nullptr );
 	vkDestroyDevice( _mLogicalDevice, nullptr );
+	DestroyDebugReportCallbackEXT( _mVkInstance, _mDebugCallbackHandle, nullptr );
 	vkDestroyInstance( _mVkInstance, nullptr );
+
+
+	// Shutdown GLFW
+	glfwTerminate(); // window delete cannot be done before glfwTerminate as glfwTerminate cleans windows
+	glfwDestroyWindow( _mWindow ); // Can use delete because terminate alters all windows
 
 	cout << "VK_Renderer destructor completed" << endl;
 }
@@ -88,27 +91,71 @@ bool VK_Renderer::IfVKErrorPrintMSG( VkResult VkState, string output )
 }
 
 
-VkResult VK_Renderer::InitVulkanDevicesAndRenderer()
+VKAPI_ATTR VkBool32 VKAPI_CALL VK_Renderer::DebugCallback( VkDebugReportFlagsEXT msgTypesAsFlags,
+														   VkDebugReportObjectTypeEXT msgSubjectObj,
+														   uint64_t object,
+														   size_t location,
+														   int32_t code,
+														   const char* layerPrefix,
+														   const char* message,
+														   void* userData )
 {
-	VkResult returnResult = VK_SUCCESS;
+	cerr << "Debug Callback was called, message reads: " << layerPrefix << " -> " << message << endl;
+	return VK_FALSE;
+}
 
-	// Vulkan initialisation methods follow this structure:
-	// https://vulkan.lunarg.com/doc/sdk/1.0.46.0/windows/samples_index.html
-	if( VK_SUCCESS != ( returnResult = InitInstance() ) )					return returnResult;
-	if( VK_SUCCESS != ( returnResult = ChooseAPhysicalDevice() ) )			return returnResult;
-	if( VK_SUCCESS != ( returnResult = InitLogicalDevice() ) )				return returnResult;
 
-	if( glfwInit() )
+VkResult VK_Renderer::CreateDebugReportCallbackEXT( VkInstance instance,
+													const VkDebugReportCallbackCreateInfoEXT* pCreateInfo,
+													const VkAllocationCallbacks* pAllocator,
+													VkDebugReportCallbackEXT* pCallback )
+{
+	auto func = ( PFN_vkCreateDebugReportCallbackEXT ) vkGetInstanceProcAddr( instance, "vkCreateDebugReportCallbackEXT" );
+	if( func != nullptr )
 	{
-		CreateGLFWWindow();
+		return func( instance, pCreateInfo, pAllocator, pCallback );
 	}
 	else
+	{
+		return VK_ERROR_EXTENSION_NOT_PRESENT;
+	}
+}
+
+
+void VK_Renderer::DestroyDebugReportCallbackEXT( VkInstance instance,
+												 VkDebugReportCallbackEXT callback,
+												 const VkAllocationCallbacks* pAllocator )
+{
+	auto func = ( PFN_vkDestroyDebugReportCallbackEXT ) vkGetInstanceProcAddr( instance, "vkDestroyDebugReportCallbackEXT" );
+	if( func != nullptr )
+	{
+		func( instance, callback, pAllocator );
+	}
+}
+
+
+VkResult VK_Renderer::InitVulkanAndGLFW()
+{
+	if( !glfwInit() )
 	{
 		cout << "GLFW couldn't be initialised" << endl;
 		return VK_ERROR_EXTENSION_NOT_PRESENT;
 	}
 
-	if( VK_SUCCESS != ( returnResult = InitialiseWindowSurface() ) )	return returnResult;
+	CreateGLFWWindow();
+	return InitVulkanRenderer();
+}
+
+
+VkResult VK_Renderer::InitVulkanRenderer()
+{
+	VkResult returnResult = VK_SUCCESS;
+
+	if( VK_SUCCESS != ( returnResult = InitInstance() ) )					return returnResult;
+	if( VK_SUCCESS != ( returnResult = SetUpDebugCallback() ) )				return returnResult;
+	if( VK_SUCCESS != ( returnResult = ChooseAPhysicalDevice() ) )			return returnResult;
+	if( VK_SUCCESS != ( returnResult = InitLogicalDevice() ) )				return returnResult;
+	if( VK_SUCCESS != ( returnResult = InitialiseWindowSurface() ) )		return returnResult;
 	if( VK_SUCCESS != ( returnResult = InitVulkanGraphicalPipeline() ) )	return returnResult;
 
 	return returnResult;
@@ -119,14 +166,6 @@ VkResult VK_Renderer::InitInstance()
 {
 	VkResult returnResult;
 
-	_mAppInfo = {}; // information about your application and Vulkan compatibility
-	_mInstanceCreateInfo = {}; // informations about the specific type of Vulkan instance you wish to create
-
-	_mAppInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	_mAppInfo.pApplicationName = "Blank Vulkan Window";
-	_mAppInfo.engineVersion = 1;
-	_mAppInfo.apiVersion = VK_MAKE_VERSION( 1, 0, 0 );
-
 	// Layers
 	uint32_t layerCount;
 	vkEnumerateInstanceLayerProperties( &layerCount, nullptr );
@@ -135,7 +174,7 @@ VkResult VK_Renderer::InitInstance()
 	vkEnumerateInstanceLayerProperties( &layerCount, vkLayerProps.data() );
 
 	vector<const char*> avalableNames;
-	if( _mValidationLayerOn )
+	if( _mIsDebugBuild )
 	{
 		for( unsigned i = 0; i < vkLayerProps.size(); i++ )
 		{
@@ -159,10 +198,22 @@ VkResult VK_Renderer::InitInstance()
 	_mTurnedOnInstanceExtensions = FindCommonCStrings( _mWantedInstanceExtensions, avalableNames );
 
 
+	_mAppInfo = {}; // information about your application and Vulkan compatibility
+	_mInstanceCreateInfo = {}; // informations about the specific type of Vulkan instance you wish to create
+
+	_mAppInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	_mAppInfo.pNext = nullptr;
+	_mAppInfo.pApplicationName = "Vulkan Renderer";
+	_mAppInfo.applicationVersion = VK_MAKE_VERSION( 1, 0, 0 );
+	_mAppInfo.pEngineName = "No Engine";
+	_mAppInfo.engineVersion = VK_MAKE_VERSION( 1, 0, 0 );
+	_mAppInfo.apiVersion = VK_MAKE_VERSION( 1, 0, 0 );
+
 	_mInstanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	_mInstanceCreateInfo.pNext = nullptr;
 	_mInstanceCreateInfo.pApplicationInfo = &_mAppInfo;
-	_mInstanceCreateInfo.enabledLayerCount = _mValidationLayerOn ? _mTurnedOnInstanceLayers.size() : 0;
-	_mInstanceCreateInfo.ppEnabledLayerNames = _mValidationLayerOn ? _mTurnedOnInstanceLayers.data() : nullptr;
+	_mInstanceCreateInfo.enabledLayerCount = _mIsDebugBuild ? _mTurnedOnInstanceLayers.size() : 0;
+	_mInstanceCreateInfo.ppEnabledLayerNames = _mIsDebugBuild ? _mTurnedOnInstanceLayers.data() : nullptr;
 	_mInstanceCreateInfo.enabledExtensionCount = _mTurnedOnInstanceExtensions.size();
 	_mInstanceCreateInfo.ppEnabledExtensionNames = _mTurnedOnInstanceExtensions.data();
 
@@ -170,6 +221,23 @@ VkResult VK_Renderer::InitInstance()
 									 nullptr,
 									 &_mVkInstance );
 
+	IfVKErrorPrintMSG( returnResult, "Instance could not be created" );
+
+	return returnResult;
+}
+
+
+VkResult VK_Renderer::SetUpDebugCallback()
+{
+	if( !_mIsDebugBuild ) return VK_SUCCESS;
+
+	VkDebugReportCallbackCreateInfoEXT createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
+	createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
+	createInfo.pfnCallback = DebugCallback;
+
+	VkResult returnResult = CreateDebugReportCallbackEXT( _mVkInstance, &createInfo, nullptr, &_mDebugCallbackHandle );
+	IfVKErrorPrintMSG( returnResult, "Could not set up a debug callback" );
 	return returnResult;
 }
 
@@ -628,11 +696,12 @@ void VK_Renderer::CreateGLFWWindow()
 {
 	// Creates a window "without a context" - Go here to find out more: http://www.glfw.org/docs/latest/context_guide.html#context_less
 	glfwWindowHint( GLFW_CLIENT_API, GLFW_NO_API );
+	//glfwWindowHint( GLFW_RESIZABLE, GLFW_FALSE );
 	_mWindow = glfwCreateWindow( _mWidth, _mHeight, "Vulkan Renderer", NULL, NULL );
 
-	glfwMakeContextCurrent( _mWindow );
+	/*glfwMakeContextCurrent( _mWindow );
 	glfwSetInputMode( _mWindow, GLFW_STICKY_KEYS, VK_TRUE );
-	glfwSetInputMode( _mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL );
+	glfwSetInputMode( _mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL );*/
 }
 
 

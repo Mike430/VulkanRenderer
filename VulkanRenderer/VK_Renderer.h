@@ -29,9 +29,9 @@ class VK_Renderer
 {
 private:
 #ifdef NDEBUG
-	const bool _mValidationLayerOn = false;
+	const bool _mIsDebugBuild = false;
 #else
-	const bool _mValidationLayerOn = true;
+	const bool _mIsDebugBuild = true;
 #endif
 	const uint8_t _mSwapChainSize = 2;
 
@@ -55,6 +55,8 @@ private:
 	uint32_t									_mChainNextImageIndex = 0;
 
 	// Vulkan variables
+	VkDebugReportCallbackEXT					_mDebugCallbackHandle;
+
 	VkApplicationInfo							_mAppInfo;
 	VkInstanceCreateInfo						_mInstanceCreateInfo;
 
@@ -86,10 +88,14 @@ private:
 
 	// Methods
 	// Vulkan
-	bool										IfVKErrorPrintMSG(VkResult VkState, string output);
+	VkResult									InitVulkanRenderer();
+	VkResult									InitVulkanAndGLFW();
+	static VKAPI_ATTR VkBool32 VKAPI_CALL		DebugCallback( VkDebugReportFlagsEXT msgTypesAsFlags, VkDebugReportObjectTypeEXT msgSubjectObj, uint64_t object, size_t location, int32_t code, const char* layerPrefix, const char* message, void* userData );
+	VkResult									CreateDebugReportCallbackEXT( VkInstance instance, const VkDebugReportCallbackCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback );
+	void										DestroyDebugReportCallbackEXT( VkInstance instance, VkDebugReportCallbackEXT callback, const VkAllocationCallbacks* pAllocator );
 
-	VkResult									InitVulkanDevicesAndRenderer();
 	VkResult									InitInstance();
+	VkResult									SetUpDebugCallback();
 	VkResult									ChooseAPhysicalDevice();
 	VkResult									InitLogicalDevice();
 
@@ -104,6 +110,9 @@ private:
 	// GLFW
 	void										CreateGLFWWindow();
 	VkResult									InitialiseWindowSurface();
+
+	// Custom
+	bool										IfVKErrorPrintMSG( VkResult VkState, string output );
 public:
 	VK_Renderer();
 	~VK_Renderer();
