@@ -271,60 +271,75 @@ VkResult VK_Renderer::SetUpDebugCallback()
 
 VkResult VK_Renderer::ChooseAPhysicalDevice()
 {
-	vector<VkPhysicalDevice> physicalDevices;
 	uint32_t physicalDeviceCount = 0;
 	VkResult returnResult = vkEnumeratePhysicalDevices( _mVkInstance,
 														&physicalDeviceCount,
 														nullptr );
 
-	// If there are any vulkan compatible devices
-	if( returnResult == VK_SUCCESS || physicalDeviceCount == 0 )
+	if( returnResult != VK_SUCCESS || physicalDeviceCount == 0 )
 	{
-		// Size the device array appropriately and get the physical device handles
-		physicalDevices.resize( physicalDeviceCount );
-		returnResult = vkEnumeratePhysicalDevices( _mVkInstance,
-												   &physicalDeviceCount,
-												   &physicalDevices[ 0 ] );
-	}
-	else
-	{
-		cout << "No suitable devices to enumerate" << endl;
+		IfVKErrorPrintMSG( returnResult, "System scan for secondary processors either failed or couldn't find a secondary processor. Terminating." );
+
 		return returnResult;
 	}
 
-	cout << physicalDevices.size() << " Physical Device(s) have been found on this system." << endl;
+	vector<VkPhysicalDevice> physicalDevices( physicalDeviceCount );
+	returnResult = vkEnumeratePhysicalDevices( _mVkInstance,
+											   &physicalDeviceCount,
+											   physicalDevices.data() );
 
-	VkPhysicalDeviceProperties physicalDeviceProperties = VkPhysicalDeviceProperties();
-	VkPhysicalDeviceProperties temp_PhysicalDeviceProperties = VkPhysicalDeviceProperties();
-	int winningIndex = 0;
+	int winningIndex = -1;
+	uint64_t highestScore = 0;
+	VkPhysicalDeviceProperties winningDeviceProps = {};
+	VkPhysicalDeviceProperties tempDeviceProps = {};
+
+	cout << endl << "There are " << physicalDeviceCount << " secondary processor(s) available, they are: " << endl;
 
 	for( unsigned i = 0; i < physicalDevices.size(); i++ )
 	{
-		vkGetPhysicalDeviceProperties( physicalDevices.at( i ), &temp_PhysicalDeviceProperties );
+		uint64_t currentScore = RatePhysicalDeviceForGameGraphics( &physicalDevices.at( i ) );
+		vkGetPhysicalDeviceProperties( physicalDevices.at( i ), &tempDeviceProps );
+		cout << ( i + 1 ) << " : " << tempDeviceProps.deviceName << " - score: " << currentScore << endl;
 
-		cout << i << "\nVkHandle\t" << physicalDevices.at( i ) <<
-			"\nDevice name:\t" << temp_PhysicalDeviceProperties.deviceName <<
-			"\nDevice type:\t" << temp_PhysicalDeviceProperties.deviceType << // typedef enum VKPhysicalDeviceType {0-4} - 2 = Descrete GPU
-			"\nDevice cpty:\t" << temp_PhysicalDeviceProperties.limits.maxMemoryAllocationCount << endl;
-
-		if( ( physicalDeviceProperties.deviceName == "" ||
-			  physicalDeviceProperties.limits.maxMemoryAllocationCount < temp_PhysicalDeviceProperties.limits.maxMemoryAllocationCount ) &&
-			temp_PhysicalDeviceProperties.deviceType == 2 )
+		if( currentScore > highestScore )
 		{
-			physicalDeviceProperties = temp_PhysicalDeviceProperties;
+			highestScore = currentScore;
 			winningIndex = i;
+			winningDeviceProps = tempDeviceProps;
 		}
 	}
 
-	if( physicalDeviceProperties.deviceName == "" )
+	if( winningIndex == -1 )
 	{
-		cout << "\nNo intergrated GPU device was found, exiting." << endl;
+		IfVKErrorPrintMSG( VK_ERROR_INITIALIZATION_FAILED, "No intergrated GPU device was found, Terminating." );
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
 
+	cout << "This application will use: " << winningDeviceProps.deviceName << endl << endl;
 	_mPhysicalDevice = physicalDevices.at( winningIndex );
-	cout << "\nWe're using the " << physicalDeviceProperties.deviceName << " for graphics\n" << endl;
+
 	return VK_SUCCESS;
+}
+
+
+uint64_t VK_Renderer::RatePhysicalDeviceForGameGraphics( VkPhysicalDevice* physicalDevice )
+{
+	uint64_t gpuScore = 0;
+
+	VkPhysicalDeviceProperties deviceProps;
+	VkPhysicalDeviceFeatures deviceFeatures;
+	vkGetPhysicalDeviceProperties( *physicalDevice, &deviceProps );
+	vkGetPhysicalDeviceFeatures( *physicalDevice, &deviceFeatures );
+
+	if( deviceProps.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU || !deviceFeatures.geometryShader )
+	{
+		return gpuScore;
+	}
+
+	gpuScore += deviceProps.limits.maxMemoryAllocationCount;
+	gpuScore += deviceProps.limits.maxImageDimension2D;
+
+	return gpuScore;
 }
 
 

@@ -81,7 +81,7 @@ private:
 	VkSurfaceKHR								_mWindowSurface;					// The window "Surface" Vulkan will be drawing onto
 
 	VkSwapchainKHR								_mSwapChainHandle;
-	vector<VkImage>								_mSwapChainImages;					// Every immage needs an image view, conside a struct
+	vector<VkImage>								_mSwapChainImages;					// An Image in the swap chain consists of an image, image view, frame buffer and optional fence
 	vector<VkImageView>							_mSwapChainImageViews;
 	vector<VkFramebuffer>						_mSwapChainFrameBuffers;
 	vector<VkFence>								_mSwapChainRenderFences;
@@ -115,6 +115,7 @@ private:
 	VkResult									InitFrameBuffers();
 	VkResult									InitRenderFences();
 
+	// Temporary
 	VkResult									InitVertexBuffer();
 
 	// GLFW
@@ -124,6 +125,8 @@ private:
 	// Custom
 	bool										IfVKErrorPrintMSG( VkResult VkState, string errOutput );
 	bool										IfVKErrorPrintMSG( VkResult VkState, string errOutput, string successOutput );
+
+	uint64_t									RatePhysicalDeviceForGameGraphics(VkPhysicalDevice* physicalDevice);
 public:
 	VK_Renderer();
 	~VK_Renderer();
