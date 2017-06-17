@@ -290,6 +290,8 @@ VkResult VK_Renderer::ChooseAPhysicalDevice()
 
 	int winningIndex = -1;
 	uint64_t highestScore = 0;
+	DeviceQueueFamilyIndexes indicies;
+	DeviceQueueFamilyIndexes finalIndicies;
 	VkPhysicalDeviceProperties winningDeviceProps = {};
 	VkPhysicalDeviceProperties tempDeviceProps = {};
 
@@ -297,15 +299,18 @@ VkResult VK_Renderer::ChooseAPhysicalDevice()
 
 	for( unsigned i = 0; i < physicalDevices.size(); i++ )
 	{
+		indicies = FindDeviceQueueFamilies( &physicalDevices.at( i ) );
+		bool isSuitable = indicies.HasAllNeededQueues();
 		uint64_t currentScore = RatePhysicalDeviceForGameGraphics( &physicalDevices.at( i ) );
 		vkGetPhysicalDeviceProperties( physicalDevices.at( i ), &tempDeviceProps );
-		cout << ( i + 1 ) << " : " << tempDeviceProps.deviceName << " - score: " << currentScore << endl;
+		cout << ( i + 1 ) << " : " << tempDeviceProps.deviceName << " - score: " << currentScore << " - Has req queues: " << ( isSuitable ? "true" : "false" ) << endl;
 
-		if( currentScore > highestScore )
+		if( currentScore > highestScore && isSuitable)
 		{
 			highestScore = currentScore;
 			winningIndex = i;
 			winningDeviceProps = tempDeviceProps;
+			finalIndicies = indicies;
 		}
 	}
 
@@ -315,31 +320,11 @@ VkResult VK_Renderer::ChooseAPhysicalDevice()
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
 
-	cout << "This application will use: " << winningDeviceProps.deviceName << endl << endl;
+	cout << "Chosen GPU: " << winningDeviceProps.deviceName << endl;
 	_mPhysicalDevice = physicalDevices.at( winningIndex );
+	_mPhysicalDeviceQueueFamilyIndexes = finalIndicies;
 
 	return VK_SUCCESS;
-}
-
-
-uint64_t VK_Renderer::RatePhysicalDeviceForGameGraphics( VkPhysicalDevice* physicalDevice )
-{
-	uint64_t gpuScore = 0;
-
-	VkPhysicalDeviceProperties deviceProps;
-	VkPhysicalDeviceFeatures deviceFeatures;
-	vkGetPhysicalDeviceProperties( *physicalDevice, &deviceProps );
-	vkGetPhysicalDeviceFeatures( *physicalDevice, &deviceFeatures );
-
-	if( deviceProps.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU || !deviceFeatures.geometryShader )
-	{
-		return gpuScore;
-	}
-
-	gpuScore += deviceProps.limits.maxMemoryAllocationCount;
-	gpuScore += deviceProps.limits.maxImageDimension2D;
-
-	return gpuScore;
 }
 
 
@@ -724,6 +709,53 @@ VkResult VK_Renderer::InitVertexBuffer()
 	IfVKErrorPrintMSG( returnResult, "Could not bind the Vertex Buffer to the GPU" );
 
 	return returnResult;
+}
+
+
+uint64_t VK_Renderer::RatePhysicalDeviceForGameGraphics( VkPhysicalDevice* physicalDevice )
+{
+	uint64_t gpuScore = 0;
+
+	VkPhysicalDeviceProperties deviceProps;
+	VkPhysicalDeviceFeatures deviceFeatures;
+	vkGetPhysicalDeviceProperties( *physicalDevice, &deviceProps );
+	vkGetPhysicalDeviceFeatures( *physicalDevice, &deviceFeatures );
+
+	if( deviceProps.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU || !deviceFeatures.geometryShader )
+	{
+		return gpuScore;
+	}
+
+	gpuScore += deviceProps.limits.maxMemoryAllocationCount;
+	gpuScore += deviceProps.limits.maxImageDimension2D;
+
+	return gpuScore;
+}
+
+
+DeviceQueueFamilyIndexes VK_Renderer::FindDeviceQueueFamilies( VkPhysicalDevice* physicalDevice )
+{
+	DeviceQueueFamilyIndexes indices;
+
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties( *physicalDevice, &queueFamilyCount, nullptr );
+	vector<VkQueueFamilyProperties> queueFamilyProps( queueFamilyCount );
+	vkGetPhysicalDeviceQueueFamilyProperties( *physicalDevice, &queueFamilyCount, queueFamilyProps.data() );
+
+	for( int i = 0; i < queueFamilyCount; i++ )
+	{
+		if( queueFamilyProps.at( i ).queueCount > 0 && queueFamilyProps.at( i ).queueFlags & VK_QUEUE_GRAPHICS_BIT )
+		{
+			indices._mGraphicsFamilyIndex = i;
+		}
+
+		if( indices.HasAllNeededQueues() )
+		{
+			break;
+		}
+	}
+
+	return indices;
 }
 
 

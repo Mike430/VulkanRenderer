@@ -30,6 +30,18 @@ using namespace std;
 using namespace Utilities;
 using namespace GraphicalUtilities;
 
+
+struct DeviceQueueFamilyIndexes
+{
+	int _mGraphicsFamilyIndex = -1;
+
+	bool HasAllNeededQueues()
+	{
+		return _mGraphicsFamilyIndex != -1;
+	}
+};
+
+
 class VK_Renderer
 {
 private:
@@ -72,6 +84,7 @@ private:
 
 	VkInstance									_mVkInstance;						// Used to track hardware's state (One instance can have many physical devices I only want one)
 	VkPhysicalDevice							_mPhysicalDevice;					// Of the potentially many devices, this renderer will only utilize one
+	DeviceQueueFamilyIndexes					_mPhysicalDeviceQueueFamilyIndexes;	// Look uptable for important Device Queues when building logical device
 	VkDevice									_mLogicalDevice;					// Abstraction of the hardware
 	VkQueue										_mGraphicsQueue;					// The handle through which we'll send graphical instructions
 	uint32_t									_mGraphicsQueueDeviceIndex;			// Where the Graphics queue is on the graphics card
@@ -127,6 +140,7 @@ private:
 	bool										IfVKErrorPrintMSG( VkResult VkState, string errOutput, string successOutput );
 
 	uint64_t									RatePhysicalDeviceForGameGraphics(VkPhysicalDevice* physicalDevice);
+	DeviceQueueFamilyIndexes					FindDeviceQueueFamilies( VkPhysicalDevice* physicalDevice );
 public:
 	VK_Renderer();
 	~VK_Renderer();
