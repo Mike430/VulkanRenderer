@@ -66,12 +66,13 @@ private:
 
 	// Vulkan variables
 	// C strings for searching in Vulkan.h
-	vector<const char*>							_mWantedInstanceLayers;
+	vector<const char*>							_mWantedInstanceAndDeviceLayers;
 	vector<const char*>							_mWantedInstanceExtensions;
 	vector<const char*>							_mWantedDeviceExtensions;
 
 	vector<const char*>							_mTurnedOnInstanceLayers;
 	vector<const char*>							_mTurnedOnInstanceExtensions;
+	vector<const char*>							_mTurnedOnDeviceLayers;
 	vector<const char*>							_mTurnedOnDeviceExtensions;
 
 	vector<vector<vertex>>						_mVertexBufferData;
@@ -87,7 +88,7 @@ private:
 	DeviceQueueFamilyIndexes					_mPhysicalDeviceQueueFamilyIndexes;	// Look uptable for important Device Queues when building logical device
 	VkDevice									_mLogicalDevice;					// Abstraction of the hardware
 	VkQueue										_mGraphicsQueue;					// The handle through which we'll send graphical instructions
-	uint32_t									_mGraphicsQueueDeviceIndex;			// Where the Graphics queue is on the graphics card
+	//uint32_t									_mGraphicsQueueDeviceIndex;			// Where the Graphics queue is on the graphics card
 	VkCommandPool								_mGraphicsQueueCmdPool;				// 
 	VkCommandBuffer								_mGraphicsQueueCmdBuffer;			//
 	VkRenderPass								_mRenderPass;						//
@@ -121,8 +122,6 @@ private:
 	VkResult									SetUpDebugCallback();
 	VkResult									ChooseAPhysicalDevice();
 	VkResult									InitLogicalDevice();
-
-	VkResult									InitVulkanGraphicalPipeline();
 	VkResult									InitSwapChain();
 	VkResult									InitGraphicsQueue();
 	VkResult									InitFrameBuffers();

@@ -9,19 +9,19 @@ VK_Renderer::VK_Renderer()
 	cout << "VK_Renderer constructor called" << endl;
 
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_api_dump" ); // Doesn't show errors, just shows the evolution of your vulkan app by dumping every key change that occures
-	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_core_validation" ); // Logs every error that occures
-	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_monitor" );
-	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_object_tracker" ); // tells you have you haven't deleted when cleaning up
-	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_parameter_validation" );
-	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_screenshot" );
-	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_swapchain" ); // specifically targets swapchain issues
-	_mWantedInstanceLayers.push_back( "VK_LAYER_GOOGLE_threading" );
-	_mWantedInstanceLayers.push_back( "VK_LAYER_GOOGLE_unique_objects" );
+	_mWantedInstanceAndDeviceLayers.push_back( "VK_LAYER_LUNARG_core_validation" ); // Logs every error that occures
+	_mWantedInstanceAndDeviceLayers.push_back( "VK_LAYER_LUNARG_monitor" );
+	_mWantedInstanceAndDeviceLayers.push_back( "VK_LAYER_LUNARG_object_tracker" ); // tells you have you haven't deleted when cleaning up
+	_mWantedInstanceAndDeviceLayers.push_back( "VK_LAYER_LUNARG_parameter_validation" );
+	_mWantedInstanceAndDeviceLayers.push_back( "VK_LAYER_LUNARG_screenshot" );
+	_mWantedInstanceAndDeviceLayers.push_back( "VK_LAYER_LUNARG_swapchain" ); // specifically targets swapchain issues
+	_mWantedInstanceAndDeviceLayers.push_back( "VK_LAYER_GOOGLE_threading" );
+	_mWantedInstanceAndDeviceLayers.push_back( "VK_LAYER_GOOGLE_unique_objects" );
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_vktrace" ); // breaks my application for some reason at instance initialisation
-	_mWantedInstanceLayers.push_back( "VK_LAYER_NV_optimus" );
+	_mWantedInstanceAndDeviceLayers.push_back( "VK_LAYER_NV_optimus" );
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_RENDERDOC_Capture" ); // fix pipeline and this should work with renderdoc
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_VALVE_steam_overlay" );
-	_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_standard_validation" ); // additional error loggings
+	_mWantedInstanceAndDeviceLayers.push_back( "VK_LAYER_LUNARG_standard_validation" ); // additional error loggings
 
 	// Declare a lists of all extensions we want to feed into our Vulkan Instance and Device
 	_mWantedInstanceExtensions.push_back( VK_KHR_SURFACE_EXTENSION_NAME );
@@ -174,16 +174,32 @@ VkResult VK_Renderer::InitVulkanRenderer()
 						   "Initialised debug." ) )							return returnResult;
 	if( IfVKErrorPrintMSG( ChooseAPhysicalDevice(),
 						   "Failed to choose a device.",
-						   "Chose device." ) )								return returnResult;
+						   "Physical device chosen." ) )					return returnResult;
 	if( IfVKErrorPrintMSG( InitLogicalDevice(),
-						   "Failed to initialise device.",
-						   "Initialised device." ) )						return returnResult;
+						   "Failed to initialise logical device.",
+						   "Logical device initialised." ) )				return returnResult;
 	if( IfVKErrorPrintMSG( InitialiseWindowSurface(),
 						   "Failed to initialise surface.",
-						   "Initialised surface." ) )						return returnResult;
-	if( IfVKErrorPrintMSG( InitVulkanGraphicalPipeline(),
+						   "Surface initialised." ) )						return returnResult;
+	if( IfVKErrorPrintMSG( InitSwapChain(),
+						   "Failed to initialise swap chain.",
+						   "Swap chain initialised." ) )					return returnResult;
+	if( IfVKErrorPrintMSG( InitGraphicsQueue(),
+						   "Failed to initialise graphical queues.",
+						   "Graphical queues initialised." ) )				return returnResult;
+	if( IfVKErrorPrintMSG( InitFrameBuffers(),
+						   "Failed to initialise frame buffers.",
+						   "Frame buffers initialised." ) )					return returnResult;
+	if( IfVKErrorPrintMSG( InitRenderFences(),
+						   "Failed to initialise render fences.",
+						   "render fences initialised." ) )					return returnResult;
+	if( IfVKErrorPrintMSG( InitVertexBuffer(),
+						   "Failed to initialise vertex buffer.",
+						   "vertex buffer initialised." ) )					return returnResult;
+
+	/*if( IfVKErrorPrintMSG( InitVulkanGraphicalPipeline(),
 						   "Failed to initialise pipeline.",
-						   "Initialised pipeline." ) )						return returnResult;
+						   "Initialised pipeline." ) )						return returnResult;*/
 
 	return returnResult;
 }
@@ -207,7 +223,7 @@ VkResult VK_Renderer::InitInstance()
 		{
 			avalableNames.push_back( vkLayerProps.at( i ).layerName );
 		}
-		_mTurnedOnInstanceLayers = FindCommonCStrings( _mWantedInstanceLayers, avalableNames );
+		_mTurnedOnInstanceLayers = FindCommonCStrings( _mWantedInstanceAndDeviceLayers, avalableNames );
 	}
 
 	// Extensions
@@ -305,7 +321,7 @@ VkResult VK_Renderer::ChooseAPhysicalDevice()
 		vkGetPhysicalDeviceProperties( physicalDevices.at( i ), &tempDeviceProps );
 		cout << ( i + 1 ) << " : " << tempDeviceProps.deviceName << " - score: " << currentScore << " - Has req queues: " << ( isSuitable ? "true" : "false" ) << endl;
 
-		if( currentScore > highestScore && isSuitable)
+		if( currentScore > highestScore && isSuitable )
 		{
 			highestScore = currentScore;
 			winningIndex = i;
@@ -332,46 +348,34 @@ VkResult VK_Renderer::InitLogicalDevice()
 {
 	VkResult returnResult;
 
-	VkPhysicalDeviceFeatures supportedFeatures;
 	VkPhysicalDeviceFeatures requiredFeatures = {};
-	vkGetPhysicalDeviceFeatures( _mPhysicalDevice, &supportedFeatures );
-
-	requiredFeatures.multiDrawIndirect = supportedFeatures.multiDrawIndirect;
 	requiredFeatures.tessellationShader = VK_TRUE;
 	requiredFeatures.geometryShader = VK_TRUE;
+	requiredFeatures.samplerAnisotropy = VK_TRUE;
 
-
-	uint32_t queueFamilyCount;
-	vkGetPhysicalDeviceQueueFamilyProperties( _mPhysicalDevice, &queueFamilyCount, nullptr );
-	vector<VkQueueFamilyProperties> familyProperties( queueFamilyCount );
-	vkGetPhysicalDeviceQueueFamilyProperties( _mPhysicalDevice, &queueFamilyCount, familyProperties.data() );
-	_mGraphicsQueueDeviceIndex = 0;
-
-	for( unsigned i = 0; i < queueFamilyCount; i++ )
-	{
-		cout << VK_QUEUE_GRAPHICS_BIT << " - " << familyProperties.at( i ).queueFlags;
-
-		if( VK_QUEUE_GRAPHICS_BIT & familyProperties.at( i ).queueFlags )
-		{
-			cout << " : This is the graphics queue." << endl;
-			_mGraphicsQueueDeviceIndex = i;
-		}
-		else
-		{
-			cout << " : This isn't the graphics queue." << endl;
-		}
-	}
-
-	float queuePriorities[] = { 1.0f };
+	float queuePriority = 1.0f;
 
 	VkDeviceQueueCreateInfo deviceQueueCreateInfo;
 	deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 	deviceQueueCreateInfo.pNext = nullptr;
 	deviceQueueCreateInfo.flags = 0;
-	deviceQueueCreateInfo.queueFamilyIndex = _mGraphicsQueueDeviceIndex;
+	deviceQueueCreateInfo.queueFamilyIndex = _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex;
 	deviceQueueCreateInfo.queueCount = 1;
-	deviceQueueCreateInfo.pQueuePriorities = queuePriorities;
+	deviceQueueCreateInfo.pQueuePriorities = &queuePriority;
 
+	// Get the available layers
+	uint32_t layerCount;
+	vkEnumerateDeviceLayerProperties( _mPhysicalDevice, &layerCount, nullptr );
+	cout << endl << "We have " << layerCount << " layers on the chose graphics card. They are:" << endl;
+	vector<VkLayerProperties> vkDeviceLayerProps( layerCount );
+	vkEnumerateDeviceLayerProperties( _mPhysicalDevice, &layerCount, vkDeviceLayerProps.data() );
+
+	vector<const char*> avalableNames;
+	for( unsigned i = 0; i < vkDeviceLayerProps.size(); i++ )
+	{
+		avalableNames.push_back( vkDeviceLayerProps.at( i ).layerName );
+	}
+	_mTurnedOnDeviceLayers = FindCommonCStrings( _mWantedInstanceAndDeviceLayers, avalableNames );
 
 	// Get the available extensions
 	uint32_t extensionCount;
@@ -381,7 +385,6 @@ VkResult VK_Renderer::InitLogicalDevice()
 	vkEnumerateDeviceExtensionProperties( _mPhysicalDevice, nullptr, &extensionCount, vkDeviceExtensionProps.data() );
 
 
-	vector<const char*> avalableNames;
 	for( unsigned i = 0; i < vkDeviceExtensionProps.size(); i++ )
 	{
 		avalableNames.push_back( vkDeviceExtensionProps.at( i ).extensionName );
@@ -395,8 +398,8 @@ VkResult VK_Renderer::InitLogicalDevice()
 	deviceCreateInfo.flags = 0;
 	deviceCreateInfo.queueCreateInfoCount = 1;
 	deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
-	deviceCreateInfo.enabledLayerCount = 0;
-	deviceCreateInfo.ppEnabledLayerNames = nullptr;
+	deviceCreateInfo.enabledLayerCount = _mIsDebugBuild ? _mTurnedOnDeviceLayers.size() : 0;
+	deviceCreateInfo.ppEnabledLayerNames = _mIsDebugBuild ? _mTurnedOnDeviceLayers.data() : nullptr;
 	deviceCreateInfo.enabledExtensionCount = _mTurnedOnDeviceExtensions.size();
 	deviceCreateInfo.ppEnabledExtensionNames = _mTurnedOnDeviceExtensions.data();
 	deviceCreateInfo.pEnabledFeatures = &requiredFeatures;
@@ -404,20 +407,7 @@ VkResult VK_Renderer::InitLogicalDevice()
 
 	returnResult = vkCreateDevice( _mPhysicalDevice, &deviceCreateInfo, nullptr, &_mLogicalDevice );
 
-	vkGetDeviceQueue( _mLogicalDevice, _mGraphicsQueueDeviceIndex, 0, &_mGraphicsQueue );
-
-	return returnResult;
-}
-
-
-VkResult VK_Renderer::InitVulkanGraphicalPipeline()
-{
-	VkResult returnResult = VK_SUCCESS;
-	if( VK_SUCCESS != ( returnResult = InitSwapChain() ) )				return returnResult;
-	if( VK_SUCCESS != ( returnResult = InitGraphicsQueue() ) )			return returnResult;
-	if( VK_SUCCESS != ( returnResult = InitFrameBuffers() ) )			return returnResult;
-	if( VK_SUCCESS != ( returnResult = InitRenderFences() ) )			return returnResult;
-	if( VK_SUCCESS != ( returnResult = InitVertexBuffer() ) )			return returnResult;
+	vkGetDeviceQueue( _mLogicalDevice, _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex, 0, &_mGraphicsQueue );
 
 	return returnResult;
 }
@@ -498,11 +488,6 @@ VkResult VK_Renderer::InitSwapChain()
 
 				returnResult = vkCreateImageView( _mLogicalDevice, &imageViewCreateInfo, NULL, &_mSwapChainImageViews.at( i ) );
 			}
-
-			if( returnResult == VK_SUCCESS )
-			{
-				cout << endl << "Swap Chain initialised correctly" << endl << endl;
-			}
 		}
 		else
 		{
@@ -526,7 +511,7 @@ VkResult VK_Renderer::InitGraphicsQueue()
 	VkCommandPoolCreateInfo cmdPoolCreateInfo;
 	cmdPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	cmdPoolCreateInfo.queueFamilyIndex = _mGraphicsQueueDeviceIndex;
+	cmdPoolCreateInfo.queueFamilyIndex = _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex;
 
 	returnResult = vkCreateCommandPool( _mLogicalDevice, &cmdPoolCreateInfo, NULL, &_mGraphicsQueueCmdPool );
 
@@ -550,7 +535,6 @@ VkResult VK_Renderer::InitGraphicsQueue()
 		return returnResult;
 	}
 
-	cout << "Graphics command pool & buffer initialised." << endl;
 	return returnResult;
 }
 
@@ -593,7 +577,6 @@ VkResult VK_Renderer::InitFrameBuffers()
 		cout << "We were not able to create a render pass." << endl;
 		return returnResult;
 	}
-	cout << "Render pass created" << endl;
 
 	_mSwapChainFrameBuffers.resize( _mSwapChainSize );
 
@@ -785,7 +768,7 @@ VkResult VK_Renderer::InitialiseWindowSurface()
 		cout << "Could not create a surface in which to draw. VK_ERROR: " << returnResult << endl;
 	}
 
-	returnResult = vkGetPhysicalDeviceSurfaceSupportKHR( _mPhysicalDevice, _mGraphicsQueueDeviceIndex, _mWindowSurface, &state );
+	returnResult = vkGetPhysicalDeviceSurfaceSupportKHR( _mPhysicalDevice, _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex, _mWindowSurface, &state );
 	if( returnResult != VK_SUCCESS )
 	{
 		cout << "Could not Validate surface with GPU format. VK_ERROR: " << returnResult << endl;
