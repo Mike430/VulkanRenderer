@@ -26,7 +26,7 @@ VK_Renderer::VK_Renderer()
 	// Declare a lists of all extensions we want to feed into our Vulkan Instance and Device
 	_mWantedInstanceExtensions.push_back( VK_KHR_SURFACE_EXTENSION_NAME );
 	_mWantedInstanceExtensions.push_back( VK_EXT_DEBUG_REPORT_EXTENSION_NAME );
-#if defined(VK_USE_PLATFORM_WIN32_KHR) // won't stop x64 builds - it's up to vulkan weather it's used
+#if defined(VK_USE_PLATFORM_WIN32_KHR) // Vulkan suface extension for windows specifically - nothing to do with 32 & 64 bit windows OSs
 	_mWantedInstanceExtensions.push_back( VK_KHR_WIN32_SURFACE_EXTENSION_NAME );
 #endif
 
@@ -166,21 +166,32 @@ VkResult VK_Renderer::InitVulkanRenderer()
 {
 	VkResult returnResult = VK_SUCCESS;
 
-	if( IfVKErrorPrintMSG( InitInstance(),
+	returnResult = InitInstance();
+	if( IfVKErrorPrintMSG( returnResult,
 						   "Failed to initialise instance.",
 						   "Initialised instance." ) )						return returnResult;
-	if( IfVKErrorPrintMSG( SetUpDebugCallback(),
+
+	returnResult = SetUpDebugCallback();
+	if( IfVKErrorPrintMSG( returnResult,
 						   "Failed to setup debug.",
 						   "Initialised debug." ) )							return returnResult;
-	if( IfVKErrorPrintMSG( ChooseAPhysicalDevice(),
-						   "Failed to choose a device.",
-						   "Physical device chosen." ) )					return returnResult;
-	if( IfVKErrorPrintMSG( InitLogicalDevice(),
-						   "Failed to initialise logical device.",
-						   "Logical device initialised." ) )				return returnResult;
-	if( IfVKErrorPrintMSG( InitialiseWindowSurface(),
+
+	returnResult = InitialiseWindowSurface();
+	if( IfVKErrorPrintMSG( returnResult,
 						   "Failed to initialise surface.",
 						   "Surface initialised." ) )						return returnResult;
+
+	returnResult = ChooseAPhysicalDevice();
+	if( IfVKErrorPrintMSG( returnResult,
+						   "Failed to choose a device.",
+						   "Physical device chosen." ) )					return returnResult;
+
+	returnResult = InitLogicalDevice();
+	if( IfVKErrorPrintMSG( returnResult,
+						   "Failed to initialise logical device.",
+						   "Logical device initialised." ) )				return returnResult;
+
+
 	if( IfVKErrorPrintMSG( InitSwapChain(),
 						   "Failed to initialise swap chain.",
 						   "Swap chain initialised." ) )					return returnResult;
@@ -285,6 +296,12 @@ VkResult VK_Renderer::SetUpDebugCallback()
 }
 
 
+VkResult VK_Renderer::InitialiseWindowSurface()
+{
+	return glfwCreateWindowSurface( _mVkInstance, _mWindow, nullptr, &_mWindowSurface );
+}
+
+
 VkResult VK_Renderer::ChooseAPhysicalDevice()
 {
 	uint32_t physicalDeviceCount = 0;
@@ -354,14 +371,31 @@ VkResult VK_Renderer::InitLogicalDevice()
 	requiredFeatures.samplerAnisotropy = VK_TRUE;
 
 	float queuePriority = 1.0f;
+	vector<int> deviceQueueIndexes;
+	// Vulkan preferes to work with unique index identifiers.
+	if( _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex != _mPhysicalDeviceQueueFamilyIndexes._mPresentFamilyIndex )
+	{
+		deviceQueueIndexes = { _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex, _mPhysicalDeviceQueueFamilyIndexes._mPresentFamilyIndex };
+	}
+	else
+	{
+		deviceQueueIndexes = { _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex };
+	}
 
-	VkDeviceQueueCreateInfo deviceQueueCreateInfo;
-	deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	deviceQueueCreateInfo.pNext = nullptr;
-	deviceQueueCreateInfo.flags = 0;
-	deviceQueueCreateInfo.queueFamilyIndex = _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex;
-	deviceQueueCreateInfo.queueCount = 1;
-	deviceQueueCreateInfo.pQueuePriorities = &queuePriority;
+	vector<VkDeviceQueueCreateInfo> queuesForLogicalDevice;
+
+	for( int i = 0; i < deviceQueueIndexes.size(); i++ )
+	{
+		VkDeviceQueueCreateInfo deviceQueueCreateInfo;
+		deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		deviceQueueCreateInfo.pNext = nullptr;
+		deviceQueueCreateInfo.flags = 0;
+		deviceQueueCreateInfo.queueFamilyIndex = deviceQueueIndexes.at(i);
+		deviceQueueCreateInfo.queueCount = 1;
+		deviceQueueCreateInfo.pQueuePriorities = &queuePriority;
+
+		queuesForLogicalDevice.push_back( deviceQueueCreateInfo );
+	}
 
 	// Get the available layers
 	uint32_t layerCount;
@@ -396,18 +430,18 @@ VkResult VK_Renderer::InitLogicalDevice()
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceCreateInfo.pNext = nullptr;
 	deviceCreateInfo.flags = 0;
-	deviceCreateInfo.queueCreateInfoCount = 1;
-	deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
+	deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queuesForLogicalDevice.size());
+	deviceCreateInfo.pQueueCreateInfos = queuesForLogicalDevice.data();
 	deviceCreateInfo.enabledLayerCount = _mIsDebugBuild ? _mTurnedOnDeviceLayers.size() : 0;
 	deviceCreateInfo.ppEnabledLayerNames = _mIsDebugBuild ? _mTurnedOnDeviceLayers.data() : nullptr;
 	deviceCreateInfo.enabledExtensionCount = _mTurnedOnDeviceExtensions.size();
 	deviceCreateInfo.ppEnabledExtensionNames = _mTurnedOnDeviceExtensions.data();
 	deviceCreateInfo.pEnabledFeatures = &requiredFeatures;
-
-
+	
 	returnResult = vkCreateDevice( _mPhysicalDevice, &deviceCreateInfo, nullptr, &_mLogicalDevice );
 
 	vkGetDeviceQueue( _mLogicalDevice, _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex, 0, &_mGraphicsQueue );
+	vkGetDeviceQueue( _mLogicalDevice, _mPhysicalDeviceQueueFamilyIndexes._mPresentFamilyIndex, 0, &_mPresentQueue );
 
 	return returnResult;
 }
@@ -732,6 +766,14 @@ DeviceQueueFamilyIndexes VK_Renderer::FindDeviceQueueFamilies( VkPhysicalDevice*
 			indices._mGraphicsFamilyIndex = i;
 		}
 
+		VkBool32 presentationSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR( *physicalDevice, i, _mWindowSurface, &presentationSupport );
+
+		if( queueFamilyProps.at( i ).queueCount > 0 && presentationSupport )
+		{
+			indices._mPresentFamilyIndex = i;
+		}
+
 		if( indices.HasAllNeededQueues() )
 		{
 			break;
@@ -754,27 +796,6 @@ void VK_Renderer::CreateGLFWWindow()
 	/*glfwMakeContextCurrent( _mWindow );
 	glfwSetInputMode( _mWindow, GLFW_STICKY_KEYS, VK_TRUE );
 	glfwSetInputMode( _mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL );*/
-}
-
-
-VkResult VK_Renderer::InitialiseWindowSurface()
-{
-	// Creating a Vulkan window surface
-	VkBool32 state;
-	VkResult returnResult;
-	returnResult = glfwCreateWindowSurface( _mVkInstance, _mWindow, NULL, &_mWindowSurface );
-	if( returnResult != VK_SUCCESS )
-	{
-		cout << "Could not create a surface in which to draw. VK_ERROR: " << returnResult << endl;
-	}
-
-	returnResult = vkGetPhysicalDeviceSurfaceSupportKHR( _mPhysicalDevice, _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex, _mWindowSurface, &state );
-	if( returnResult != VK_SUCCESS )
-	{
-		cout << "Could not Validate surface with GPU format. VK_ERROR: " << returnResult << endl;
-	}
-
-	return returnResult;
 }
 
 

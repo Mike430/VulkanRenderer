@@ -4,6 +4,7 @@
 
 #if defined(_WIN32)
 #define VK_USE_PLATFORM_WIN32_KHR
+#define GLFW_EXPOSE_NATIVE_WIN32
 #endif
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
@@ -24,6 +25,8 @@
 
 #include "Utilities.h"
 #include "GraphicalUtilities.h"
+#include "GLFW\glfw3.h"
+#include "GLFW\glfw3native.h"
 
 // namespaces
 using namespace std;
@@ -34,10 +37,11 @@ using namespace GraphicalUtilities;
 struct DeviceQueueFamilyIndexes
 {
 	int _mGraphicsFamilyIndex = -1;
+	int _mPresentFamilyIndex = -1;
 
 	bool HasAllNeededQueues()
 	{
-		return _mGraphicsFamilyIndex != -1;
+		return _mGraphicsFamilyIndex > -1 && _mPresentFamilyIndex > -1;
 	}
 };
 
@@ -89,6 +93,7 @@ private:
 	VkDevice									_mLogicalDevice;					// Abstraction of the hardware
 	VkQueue										_mGraphicsQueue;					// The handle through which we'll send graphical instructions
 	//uint32_t									_mGraphicsQueueDeviceIndex;			// Where the Graphics queue is on the graphics card
+	VkQueue										_mPresentQueue;
 	VkCommandPool								_mGraphicsQueueCmdPool;				// 
 	VkCommandBuffer								_mGraphicsQueueCmdBuffer;			//
 	VkRenderPass								_mRenderPass;						//
