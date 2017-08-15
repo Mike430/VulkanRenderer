@@ -21,25 +21,25 @@ void Utilities::LogIfDebug( string msg, ConsoleColours colour )
 
 void Utilities::LogSuccessIfDebug( string msg )
 {
-	LogIfDebug( msg, ConsoleColours::COLOUR_GREEN );
+	LogIfDebug( "- " + msg, ConsoleColours::COLOUR_GREEN );
 }
 
 
 void Utilities::LogInfoIfDebug( string msg )
 {
-	LogIfDebug( msg, ConsoleColours::COLOUR_BLUE  );
+	LogIfDebug( "- " + msg, ConsoleColours::COLOUR_BLUE  );
 }
 
 
 void Utilities::LogWarningIfDebug( string msg )
 {
-	LogIfDebug( msg, ConsoleColours::COLOUR_YELLOW  );
+	LogIfDebug( "* " + msg, ConsoleColours::COLOUR_YELLOW  );
 }
 
 
 void Utilities::LogErrorIfDebug( string msg )
 {
-	LogIfDebug( msg, ConsoleColours::COLOUR_RED  );
+	LogIfDebug( "! " + msg, ConsoleColours::COLOUR_RED  );
 }
 
 

@@ -100,8 +100,9 @@ private:
 
 	VkSwapchainKHR								_mSwapChainHandle;
 	vector<VkImage>								_mSwapChainImages;
-	VkFormat									_mSwapChainFormat;
-	VkExtent2D									_mSwapChainExtent;
+	vector<VkImageView>							_mSwapChainImageViews;
+	VkFormat									_mSwapChainImageFormat;
+	VkExtent2D									_mSwapChainImageExtent;
 
 	VkSurfaceFormatKHR							_mDeviceSurfaceFormats;
 	VkPresentModeKHR							_mPresentModeKHR;
@@ -121,6 +122,7 @@ private:
 	VkResult									ChooseAPhysicalDevice();
 	VkResult									InitLogicalDevice();
 	VkResult									InitSwapChain();
+	VkResult									InitImageViews();
 
 	// GLFW
 	void										CreateGLFWWindow();

@@ -47,6 +47,10 @@ VK_Renderer::~VK_Renderer()
 
 
 	// Shutdown Vulkan
+	for( VkImageView imageView : _mSwapChainImageViews )
+	{
+		vkDestroyImageView( _mLogicalDevice, imageView, nullptr );
+	}
 	vkDestroySwapchainKHR( _mLogicalDevice, _mSwapChainHandle, nullptr );
 	vkDestroyRenderPass( _mLogicalDevice, _mRenderPass, nullptr ); // Destroys the swap chain images
 	vkDestroyCommandPool( _mLogicalDevice, _mGraphicsQueueCmdPool, nullptr );
@@ -101,7 +105,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VK_Renderer::DebugCallback( VkDebugReportFlagsEXT
 														   const char* message,
 														   void* userData )
 {
-	Utilities::LogWarningIfDebug( "Debug Callback was called, message reads: " + ( ( string ) layerPrefix ) + " -> " + ( ( string ) message ) );
+	Utilities::LogErrorIfDebug( "Debug Callback was called, message reads: " + ( ( string ) layerPrefix ) + " -> " + ( ( string ) message ) );
 	return VK_FALSE;
 }
 
@@ -181,6 +185,13 @@ VkResult VK_Renderer::InitVulkanRenderer()
 	if( IfVKErrorPrintMSG( returnResult,
 						   "Failed to initialise swap chain.",
 						   "Swap chain initialised." ) )					return returnResult;
+
+	returnResult = InitImageViews();
+	if( IfVKErrorPrintMSG( returnResult,
+						   "Failed to initialise image views.",
+						   "Image views initialised." ) )					return returnResult;
+
+	// Before the image views can become render targets (FrameBuffers) we need to set up the pipeline
 
 	return returnResult;
 }
@@ -433,7 +444,7 @@ VkResult VK_Renderer::InitSwapChain()
 		imageCount = swapChainSupport._mCapabilities.maxImageCount;// Use if we can't have more than the max
 		Utilities::LogWarningIfDebug( "Can't do tripple buffering" );
 	}
-	Utilities::LogInfoIfDebug( "SwapChain length = " + imageCount );
+	Utilities::LogInfoIfDebug( "SwapChain length = " + to_string( imageCount ) );
 
 	uint32_t queueFamilyIndices[] = {
 		( uint32_t ) _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex,
@@ -454,14 +465,14 @@ VkResult VK_Renderer::InitSwapChain()
 	// Variants for the create info
 	if( _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex != _mPhysicalDeviceQueueFamilyIndexes._mPresentFamilyIndex )
 	{
-		Utilities::LogInfoIfDebug( "QueueFamily IS NOT PresentFamily" );
+		Utilities::LogInfoIfDebug( "The GPU's QueueFamily IS NOT PresentFamily" );
 		createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
 		createInfo.queueFamilyIndexCount = 2;
 		createInfo.pQueueFamilyIndices = queueFamilyIndices;
 	}
 	else
 	{
-		Utilities::LogInfoIfDebug( "QueueFamily IS THE SAME AS PresentFamily" );
+		Utilities::LogInfoIfDebug( "The GPU's QueueFamily IS THE SAME AS PresentFamily" );
 		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		createInfo.queueFamilyIndexCount = 0;
 		createInfo.pQueueFamilyIndices = nullptr;
@@ -485,8 +496,51 @@ VkResult VK_Renderer::InitSwapChain()
 	vkGetSwapchainImagesKHR( _mLogicalDevice, _mSwapChainHandle, &imageCount, _mSwapChainImages.data() );
 
 	// store new Swapchain details for remaking
-	_mSwapChainFormat = surfaceFormat.format;
-	_mSwapChainExtent = extent;
+	_mSwapChainImageFormat = surfaceFormat.format;
+	_mSwapChainImageExtent = extent;
+
+	return returnResult;
+}
+
+
+VkResult VK_Renderer::InitImageViews()
+{
+	VkResult returnResult;
+
+	_mSwapChainImageViews = vector<VkImageView>( _mSwapChainImages.size() );
+
+	for( int i = 0; i < _mSwapChainImages.size(); i++ )
+	{
+		VkImageViewCreateInfo createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = _mSwapChainImages[ i ];
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = _mSwapChainImageFormat;
+
+		// alter for monochrome images
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+		// Describing the image's purpose for external accessing
+		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+
+		returnResult = vkCreateImageView( _mLogicalDevice,
+										  &createInfo,
+										  nullptr,
+										  &_mSwapChainImageViews[ i ] );
+		if( returnResult != VK_SUCCESS )
+		{
+			Utilities::LogErrorIfDebug( "Image view " + to_string( i + 1 ) + " could not be created successfully!" );
+			break;
+		}
+	}
+
 
 	return returnResult;
 }
