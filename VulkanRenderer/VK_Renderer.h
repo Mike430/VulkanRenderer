@@ -1,36 +1,35 @@
 #pragma once
-// Project dependencies
+// Project definitions
 #define GLFW_INCLUDE_VULKAN
+
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
 #if defined(_WIN32)
 #define VK_USE_PLATFORM_WIN32_KHR
 #define GLFW_EXPOSE_NATIVE_WIN32
 #endif
 
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
-#define ENABLE_VIRTUAL_TERMINAL_PROCESSING
-#endif
-
-
+// SDK deprendencies
 #include "vulkan/vulkan.h"
 #include "GLFW/glfw3.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
-// Other dependencies
+// C++ & System dependencies
 #include <iostream>
 #include <string>
 #include <vector>
 #include <stdio.h>
 #include <string.h>
-#include <windows.h>
+#include <algorithm>
 
+// Custom dependencies
 #include "Utilities.h"
 #include "GraphicalUtilities.h"
-#include "GLFW\glfw3.h"
-#include "GLFW\glfw3native.h"
 
 // namespaces
 using namespace std;
-using namespace Utilities;
 using namespace GraphicalUtilities;
 
 
@@ -46,19 +45,19 @@ struct DeviceQueueFamilyIndexes
 };
 
 
+struct SwapChainSupportDetails
+{
+	VkSurfaceCapabilitiesKHR _mCapabilities;
+	vector<VkSurfaceFormatKHR> _mAvailableFormats;
+	vector<VkPresentModeKHR> _mAvailablePresentModes;
+};
+
+
 class VK_Renderer
 {
 private:
-#ifdef NDEBUG
-	const bool _mIsDebugBuild = false;
-#else
-	const bool _mIsDebugBuild = true;
-#endif
 	const uint8_t _mSwapChainSize = 2;
 	const string _mVkReportPrefix = "Vk_Renderer Report: ";
-
-	// Windows
-	HANDLE _mConsoleHandle;
 
 	// GLFW Variables
 	GLFWwindow*									_mWindow;
@@ -100,19 +99,13 @@ private:
 	VkSurfaceKHR								_mWindowSurface;					// The window "Surface" Vulkan will be drawing onto
 
 	VkSwapchainKHR								_mSwapChainHandle;
-	vector<VkImage>								_mSwapChainImages;					// An Image in the swap chain consists of an image, image view, frame buffer and optional fence
-	vector<VkImageView>							_mSwapChainImageViews;
-	vector<VkFramebuffer>						_mSwapChainFrameBuffers;
-	vector<VkFence>								_mSwapChainRenderFences;
-	VkExtent2D									_mSwapChainSurfaceResolution;
-	VkFormat									_mSwapChainImageFormat;
+	vector<VkImage>								_mSwapChainImages;
+	VkFormat									_mSwapChainFormat;
+	VkExtent2D									_mSwapChainExtent;
 
 	VkSurfaceFormatKHR							_mDeviceSurfaceFormats;
 	VkPresentModeKHR							_mPresentModeKHR;
 	VkSurfaceCapabilitiesKHR					_mSurfaceCapabilities;
-
-	VkBuffer									_mVertexBuffer;
-	VkDeviceMemory								_mVertexBufferMemory;
 
 
 	// Methods
@@ -128,12 +121,6 @@ private:
 	VkResult									ChooseAPhysicalDevice();
 	VkResult									InitLogicalDevice();
 	VkResult									InitSwapChain();
-	VkResult									InitGraphicsQueue();
-	VkResult									InitFrameBuffers();
-	VkResult									InitRenderFences();
-
-	// Temporary
-	VkResult									InitVertexBuffer();
 
 	// GLFW
 	void										CreateGLFWWindow();
@@ -145,6 +132,10 @@ private:
 
 	uint64_t									RatePhysicalDeviceForGameGraphics(VkPhysicalDevice* physicalDevice);
 	DeviceQueueFamilyIndexes					FindDeviceQueueFamilies( VkPhysicalDevice* physicalDevice );
+	SwapChainSupportDetails						QueryDeviceSwapChainSupport(VkPhysicalDevice* physicalDevice);
+	VkSurfaceFormatKHR							ChooseSwapChainSurfaceFormat( vector<VkSurfaceFormatKHR> availableFormats);
+	VkPresentModeKHR							ChooseSwapChainPresentationMode( vector<VkPresentModeKHR> availableModes);
+	VkExtent2D									ChooseSwapChainExtentionDimensions( VkSurfaceCapabilitiesKHR capabilities );
 public:
 	VK_Renderer();
 	~VK_Renderer();
