@@ -5,6 +5,7 @@
 #include <vector>
 #include <stdio.h>
 #include <string.h>
+#include <fstream>
 
 using namespace std;
 
@@ -31,10 +32,12 @@ namespace Utilities
 
 	void LogIfDebug( string msg, ConsoleColours colour );
 	void LogSuccessIfDebug( string msg );
-	void LogInfoIfDebug(string msg);
+	void LogInfoIfDebug( string msg );
 	void LogWarningIfDebug( string msg );
 	void LogErrorIfDebug( string msg );
 
-	vector<const char*> FindCommonCStrings( vector<const char*> wantedList, vector<const char*> avalableList);
+	vector<char> ReadFileAsCharVec( string filePathAndName );
+
+	vector<const char*> FindCommonCStrings( vector<const char*> wantedList, vector<const char*> avalableList );
 };
 

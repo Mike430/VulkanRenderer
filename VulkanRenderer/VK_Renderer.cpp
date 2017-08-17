@@ -193,6 +193,11 @@ VkResult VK_Renderer::InitVulkanRenderer()
 
 	// Before the image views can become render targets (FrameBuffers) we need to set up the pipeline
 
+	returnResult = InitGraphicsPipeline();
+	if( IfVKErrorPrintMSG( returnResult,
+						   "Failed to initialise graphics pipeline.",
+						   "Graphics pipeline initialised." ) )				return returnResult;
+
 	return returnResult;
 }
 
@@ -274,12 +279,6 @@ VkResult VK_Renderer::SetUpDebugCallback()
 	VkResult returnResult = CreateDebugReportCallbackEXT( _mVkInstance, &createInfo, nullptr, &_mDebugCallbackHandle );
 	IfVKErrorPrintMSG( returnResult, "Could not set up a debug callback" );
 	return returnResult;
-}
-
-
-VkResult VK_Renderer::InitialiseWindowSurface()
-{
-	return glfwCreateWindowSurface( _mVkInstance, _mWindow, nullptr, &_mWindowSurface );
 }
 
 
@@ -546,6 +545,70 @@ VkResult VK_Renderer::InitImageViews()
 }
 
 
+VkResult VK_Renderer::InitGraphicsPipeline()
+{
+	VkResult returnResult;
+	VkShaderModule vertexShaderModule;
+	VkShaderModule fragmentShaderModule;
+
+	vector<char> vertShaderCode = Utilities::ReadFileAsCharVec( "Assets/Shaders/vert.spv" );
+	vector<char> fragShaderCode = Utilities::ReadFileAsCharVec( "Assets/Shaders/frag.spv" );
+
+	auto vertShaderData = BuildShaderModule( vertShaderCode );
+	auto fragShaderData = BuildShaderModule( fragShaderCode );
+
+	if( vertShaderData.first != VK_SUCCESS || fragShaderData.first != VK_SUCCESS )
+	{
+		vkDestroyShaderModule( _mLogicalDevice, vertShaderData.second, nullptr );
+		vkDestroyShaderModule( _mLogicalDevice, fragShaderData.second, nullptr );
+
+		if( vertShaderData.first != VK_SUCCESS )
+		{
+			return vertShaderData.first;
+		}
+		else
+		{
+			return fragShaderData.first;
+		}
+	}
+
+	vertexShaderModule = vertShaderData.second;
+	fragmentShaderModule = fragShaderData.second;
+
+	// Assigning the shader byte code modules (wrappers) to the pipeline
+	VkPipelineShaderStageCreateInfo vertPipelineShaderCreateInfo = {};
+	vertPipelineShaderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertPipelineShaderCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertPipelineShaderCreateInfo.module = vertexShaderModule;
+	vertPipelineShaderCreateInfo.pName = "main"; 
+
+	VkPipelineShaderStageCreateInfo fragPipelineShaderCreateInfo = {};
+	fragPipelineShaderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragPipelineShaderCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragPipelineShaderCreateInfo.module = fragmentShaderModule;
+	fragPipelineShaderCreateInfo.pName = "main";// <- method to invoke in the shader byte code
+	/*
+	"...That means that it's possible to combine multiple fragment shaders into
+	a single shader module and use different entry points to differentiate
+	between their behaviors..."
+	Source - https://vulkan-tutorial.com/Drawing_a_triangle/Graphics_pipeline_basics/Shader_modules
+	*/
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = 
+	{ 
+		vertPipelineShaderCreateInfo,
+		fragPipelineShaderCreateInfo
+	};
+
+	returnResult = VK_SUCCESS;
+
+	vkDestroyShaderModule( _mLogicalDevice, vertexShaderModule, nullptr );
+	vkDestroyShaderModule( _mLogicalDevice, fragmentShaderModule, nullptr );
+
+	return returnResult;
+}
+
+
 // Utilities
 uint64_t VK_Renderer::RatePhysicalDeviceForGameGraphics( VkPhysicalDevice* physicalDevice )
 {
@@ -695,6 +758,28 @@ VkExtent2D VK_Renderer::ChooseSwapChainExtentionDimensions( VkSurfaceCapabilitie
 }
 
 
+pair<VkResult, VkShaderModule> VK_Renderer::BuildShaderModule( const vector<char>& byteCode )
+{
+	pair<VkResult, VkShaderModule> returnData;
+
+	VkShaderModuleCreateInfo createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.pNext = nullptr;
+	createInfo.codeSize = byteCode.size();
+	createInfo.pCode = reinterpret_cast< const uint32_t* >( byteCode.data() );
+
+	VkShaderModule shaderModule;
+	VkResult vkResult = vkCreateShaderModule( _mLogicalDevice, &createInfo, nullptr, &shaderModule );
+
+	returnData.first = vkResult;
+	returnData.second = shaderModule;
+
+	IfVKErrorPrintMSG( vkResult, "Could not create shader module!");
+
+	return returnData;
+}
+
+
 // Needs to be made a part of the core game engine as the renderer shouldn't have responcibility over window and input management.
 void VK_Renderer::CreateGLFWWindow()
 {
@@ -706,6 +791,12 @@ void VK_Renderer::CreateGLFWWindow()
 	/*glfwMakeContextCurrent( _mWindow );
 	glfwSetInputMode( _mWindow, GLFW_STICKY_KEYS, VK_TRUE );
 	glfwSetInputMode( _mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL );*/
+}
+
+
+VkResult VK_Renderer::InitialiseWindowSurface()
+{
+	return glfwCreateWindowSurface( _mVkInstance, _mWindow, nullptr, &_mWindowSurface );
 }
 
 

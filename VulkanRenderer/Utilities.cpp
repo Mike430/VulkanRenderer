@@ -27,19 +27,37 @@ void Utilities::LogSuccessIfDebug( string msg )
 
 void Utilities::LogInfoIfDebug( string msg )
 {
-	LogIfDebug( "- " + msg, ConsoleColours::COLOUR_BLUE  );
+	LogIfDebug( "- " + msg, ConsoleColours::COLOUR_BLUE );
 }
 
 
 void Utilities::LogWarningIfDebug( string msg )
 {
-	LogIfDebug( "* " + msg, ConsoleColours::COLOUR_YELLOW  );
+	LogIfDebug( "* " + msg, ConsoleColours::COLOUR_YELLOW );
 }
 
 
 void Utilities::LogErrorIfDebug( string msg )
 {
-	LogIfDebug( "! " + msg, ConsoleColours::COLOUR_RED  );
+	LogIfDebug( "! " + msg, ConsoleColours::COLOUR_RED );
+}
+
+
+vector<char> Utilities::ReadFileAsCharVec( string filePathAndName )
+{
+	ifstream file( filePathAndName, std::ios::ate | std::ios::binary );
+
+	if( !file.is_open() )
+	{
+		LogErrorIfDebug( filePathAndName + " could not be opened!" );
+	}
+
+	size_t fileSize = ( size_t ) file.tellg();
+	std::vector<char> buffer( fileSize );
+	file.seekg( 0 );
+	file.read( buffer.data(), fileSize );
+	file.close();
+	return buffer;
 }
 
 

@@ -86,17 +86,16 @@ private:
 	VkApplicationInfo							_mAppInfo;
 	VkInstanceCreateInfo						_mInstanceCreateInfo;
 
-	VkInstance									_mVkInstance;						// Used to track hardware's state (One instance can have many physical devices I only want one)
-	VkPhysicalDevice							_mPhysicalDevice;					// Of the potentially many devices, this renderer will only utilize one
-	DeviceQueueFamilyIndexes					_mPhysicalDeviceQueueFamilyIndexes;	// Look uptable for important Device Queues when building logical device
-	VkDevice									_mLogicalDevice;					// Abstraction of the hardware
-	VkQueue										_mGraphicsQueue;					// The handle through which we'll send graphical instructions
-	//uint32_t									_mGraphicsQueueDeviceIndex;			// Where the Graphics queue is on the graphics card
+	VkInstance									_mVkInstance;
+	VkPhysicalDevice							_mPhysicalDevice;
+	DeviceQueueFamilyIndexes					_mPhysicalDeviceQueueFamilyIndexes;
+	VkDevice									_mLogicalDevice;
+	VkQueue										_mGraphicsQueue;
 	VkQueue										_mPresentQueue;
-	VkCommandPool								_mGraphicsQueueCmdPool;				// 
-	VkCommandBuffer								_mGraphicsQueueCmdBuffer;			//
-	VkRenderPass								_mRenderPass;						//
-	VkSurfaceKHR								_mWindowSurface;					// The window "Surface" Vulkan will be drawing onto
+	VkCommandPool								_mGraphicsQueueCmdPool;
+	VkCommandBuffer								_mGraphicsQueueCmdBuffer;
+	VkRenderPass								_mRenderPass;
+	VkSurfaceKHR								_mWindowSurface;
 
 	VkSwapchainKHR								_mSwapChainHandle;
 	vector<VkImage>								_mSwapChainImages;
@@ -113,16 +112,37 @@ private:
 	// Vulkan
 	VkResult									InitVulkanRenderer();
 	VkResult									InitVulkanAndGLFW();
-	static VKAPI_ATTR VkBool32 VKAPI_CALL		DebugCallback( VkDebugReportFlagsEXT msgTypesAsFlags, VkDebugReportObjectTypeEXT msgSubjectObj, uint64_t object, size_t location, int32_t code, const char* layerPrefix, const char* message, void* userData );
-	VkResult									CreateDebugReportCallbackEXT( VkInstance instance, const VkDebugReportCallbackCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback );
-	void										DestroyDebugReportCallbackEXT( VkInstance instance, VkDebugReportCallbackEXT callback, const VkAllocationCallbacks* pAllocator );
-
+	static VKAPI_ATTR VkBool32 VKAPI_CALL		DebugCallback( VkDebugReportFlagsEXT msgTypesAsFlags,
+															   VkDebugReportObjectTypeEXT msgSubjectObj,
+															   uint64_t object,
+															   size_t location,
+															   int32_t code,
+															   const char* layerPrefix,
+															   const char* message,
+															   void* userData );
+	VkResult									CreateDebugReportCallbackEXT( VkInstance instance,
+																			  const VkDebugReportCallbackCreateInfoEXT* pCreateInfo,
+																			  const VkAllocationCallbacks* pAllocator,
+																			  VkDebugReportCallbackEXT* pCallback );
+	void										DestroyDebugReportCallbackEXT( VkInstance instance,
+																			   VkDebugReportCallbackEXT callback,
+																			   const VkAllocationCallbacks* pAllocator );
 	VkResult									InitInstance();
 	VkResult									SetUpDebugCallback();
 	VkResult									ChooseAPhysicalDevice();
 	VkResult									InitLogicalDevice();
 	VkResult									InitSwapChain();
 	VkResult									InitImageViews();
+	VkResult									InitGraphicsPipeline();
+
+	// Vk Helpers
+	uint64_t									RatePhysicalDeviceForGameGraphics( VkPhysicalDevice* physicalDevice );
+	DeviceQueueFamilyIndexes					FindDeviceQueueFamilies( VkPhysicalDevice* physicalDevice );
+	SwapChainSupportDetails						QueryDeviceSwapChainSupport( VkPhysicalDevice* physicalDevice );
+	VkSurfaceFormatKHR							ChooseSwapChainSurfaceFormat( vector<VkSurfaceFormatKHR> availableFormats );
+	VkPresentModeKHR							ChooseSwapChainPresentationMode( vector<VkPresentModeKHR> availableModes );
+	VkExtent2D									ChooseSwapChainExtentionDimensions( VkSurfaceCapabilitiesKHR capabilities );
+	pair<VkResult, VkShaderModule>				BuildShaderModule(const vector<char>& byteCode);
 
 	// GLFW
 	void										CreateGLFWWindow();
@@ -131,13 +151,6 @@ private:
 	// Custom
 	bool										IfVKErrorPrintMSG( VkResult VkState, string errOutput );
 	bool										IfVKErrorPrintMSG( VkResult VkState, string errOutput, string successOutput );
-
-	uint64_t									RatePhysicalDeviceForGameGraphics(VkPhysicalDevice* physicalDevice);
-	DeviceQueueFamilyIndexes					FindDeviceQueueFamilies( VkPhysicalDevice* physicalDevice );
-	SwapChainSupportDetails						QueryDeviceSwapChainSupport(VkPhysicalDevice* physicalDevice);
-	VkSurfaceFormatKHR							ChooseSwapChainSurfaceFormat( vector<VkSurfaceFormatKHR> availableFormats);
-	VkPresentModeKHR							ChooseSwapChainPresentationMode( vector<VkPresentModeKHR> availableModes);
-	VkExtent2D									ChooseSwapChainExtentionDimensions( VkSurfaceCapabilitiesKHR capabilities );
 public:
 	VK_Renderer();
 	~VK_Renderer();
