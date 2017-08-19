@@ -45,15 +45,14 @@ VK_Renderer::~VK_Renderer()
 {
 	Utilities::LogInfoIfDebug( "VK_Renderer destructor called" );
 
-
 	// Shutdown Vulkan
+	vkDestroyPipelineLayout( _mLogicalDevice, _mGraphicalPipeline, nullptr );
+	vkDestroyRenderPass( _mLogicalDevice, _mRenderPass, nullptr );
 	for( VkImageView imageView : _mSwapChainImageViews )
 	{
 		vkDestroyImageView( _mLogicalDevice, imageView, nullptr );
 	}
 	vkDestroySwapchainKHR( _mLogicalDevice, _mSwapChainHandle, nullptr );
-	vkDestroyRenderPass( _mLogicalDevice, _mRenderPass, nullptr ); // Destroys the swap chain images
-	vkDestroyCommandPool( _mLogicalDevice, _mGraphicsQueueCmdPool, nullptr );
 	vkDestroySurfaceKHR( _mVkInstance, _mWindowSurface, nullptr );
 	vkDestroyDevice( _mLogicalDevice, nullptr );
 	DestroyDebugReportCallbackEXT( _mVkInstance, _mDebugCallbackHandle, nullptr );
@@ -192,6 +191,11 @@ VkResult VK_Renderer::InitVulkanRenderer()
 						   "Image views initialised." ) )					return returnResult;
 
 	// Before the image views can become render targets (FrameBuffers) we need to set up the pipeline
+
+	returnResult = InitRenderPasses();
+	if( IfVKErrorPrintMSG( returnResult,
+						   "Failed to initialise the render passes.",
+						   "Render passes initialised." ) )					return returnResult;
 
 	returnResult = InitGraphicsPipeline();
 	if( IfVKErrorPrintMSG( returnResult,
@@ -545,6 +549,51 @@ VkResult VK_Renderer::InitImageViews()
 }
 
 
+VkResult VK_Renderer::InitRenderPasses()
+{
+	VkResult returnResult;
+
+	// The main render pass's create info
+	VkAttachmentDescription colorAttachmentInfo = {};
+	colorAttachmentInfo.format = _mSwapChainImageFormat;
+	colorAttachmentInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	// What to do with the image data before drawing
+	colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	// What to do with the image data after drawing
+	colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	// What to do with the Stencil data before drawing
+	colorAttachmentInfo.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	// What to do with the Stencil data before drawing
+	colorAttachmentInfo.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	// What to do with the data on the fresh canvas
+	colorAttachmentInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	// What to do with the data on the finished canvas
+	colorAttachmentInfo.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	// Info for the subpass - one renderpass may have many subpasses, we'll only use one for now.
+	VkAttachmentReference colorAttachmentRefInfo = {};
+	colorAttachmentRefInfo.attachment = 0; // Array index reference to the above
+	colorAttachmentRefInfo.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpassCreateInfo = {};
+	subpassCreateInfo.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpassCreateInfo.colorAttachmentCount = 1;// The index of the array containing our fragment shader
+	subpassCreateInfo.pColorAttachments = &colorAttachmentRefInfo;
+
+
+	VkRenderPassCreateInfo renderPassCreateInfo = {};
+	renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassCreateInfo.attachmentCount = 1;
+	renderPassCreateInfo.pAttachments = &colorAttachmentInfo;
+	renderPassCreateInfo.subpassCount = 1;
+	renderPassCreateInfo.pSubpasses = &subpassCreateInfo;
+
+	returnResult = vkCreateRenderPass( _mLogicalDevice, &renderPassCreateInfo, nullptr, &_mRenderPass );
+
+	return returnResult;
+}
+
+
 VkResult VK_Renderer::InitGraphicsPipeline()
 {
 	VkResult returnResult;
@@ -580,7 +629,7 @@ VkResult VK_Renderer::InitGraphicsPipeline()
 	vertPipelineShaderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	vertPipelineShaderCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
 	vertPipelineShaderCreateInfo.module = vertexShaderModule;
-	vertPipelineShaderCreateInfo.pName = "main"; 
+	vertPipelineShaderCreateInfo.pName = "main";
 
 	VkPipelineShaderStageCreateInfo fragPipelineShaderCreateInfo = {};
 	fragPipelineShaderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -594,13 +643,125 @@ VkResult VK_Renderer::InitGraphicsPipeline()
 	Source - https://vulkan-tutorial.com/Drawing_a_triangle/Graphics_pipeline_basics/Shader_modules
 	*/
 
-	VkPipelineShaderStageCreateInfo shaderStages[] = 
-	{ 
+	VkPipelineShaderStageCreateInfo shaderStages[] =
+	{
 		vertPipelineShaderCreateInfo,
 		fragPipelineShaderCreateInfo
 	};
 
-	returnResult = VK_SUCCESS;
+
+	// Creating Vertex input
+	VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {};
+	vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputStateCreateInfo.vertexBindingDescriptionCount = 0;
+	vertexInputStateCreateInfo.pVertexBindingDescriptions = nullptr;
+	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = 0;
+	vertexInputStateCreateInfo.pVertexAttributeDescriptions = nullptr;
+	// pVertexBindingDescriptions and pVertexAttributeDescriptions need to be set for dynamic vertex loading
+
+	// Creating the input assembly
+	VkPipelineInputAssemblyStateCreateInfo pipelineInputAsmCreateInfo = {};
+	pipelineInputAsmCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	pipelineInputAsmCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	pipelineInputAsmCreateInfo.primitiveRestartEnable = VK_FALSE;
+
+
+	// Creating the viewport and scissor region - viewing filters for the rasteriser
+	VkViewport targetViewPort = {};
+	targetViewPort.x = 0.0f;
+	targetViewPort.y = 0.0f;
+	targetViewPort.width = ( float ) _mSwapChainImageExtent.width;
+	targetViewPort.height = ( float ) _mSwapChainImageExtent.height;
+	targetViewPort.minDepth = 0.0f; // near plane
+	targetViewPort.maxDepth = 1.0f; // far plane
+	// you may render with reversed depth buffers, but they cannot be greater than 1 or less than 0
+
+	VkRect2D scissorRegion = {};
+	scissorRegion.offset = { 0, 0 };
+	scissorRegion.extent = _mSwapChainImageExtent;
+
+	VkPipelineViewportStateCreateInfo viewportCreateInfo = {};
+	viewportCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportCreateInfo.viewportCount = 1;
+	viewportCreateInfo.pViewports = &targetViewPort;
+	viewportCreateInfo.scissorCount = 1;
+	viewportCreateInfo.pScissors = &scissorRegion;
+
+
+	// Creating the Rasterizer
+	VkPipelineRasterizationStateCreateInfo rasterizerCreateInfo = {};
+	rasterizerCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	rasterizerCreateInfo.depthClampEnable = VK_FALSE;
+	// If depthClampEnable were set to true, this renders everything past the far plane with a depth of the far plane. Useful for shadow mapping but requires a GPU feature.
+	rasterizerCreateInfo.rasterizerDiscardEnable = VK_FALSE;
+	// If rasterizerDiscardEnable were set to true, Geometry data would be discarded at the rasterizer, basically disabling all visual data for the framebuffer.
+	rasterizerCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
+	// All modes other than VK_POLYGON_MODE_FILL require GPU features to be enabled
+	rasterizerCreateInfo.lineWidth = 1.0f;
+	rasterizerCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizerCreateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizerCreateInfo.depthBiasEnable = VK_FALSE;
+	rasterizerCreateInfo.depthBiasConstantFactor = 0.0f;
+	rasterizerCreateInfo.depthBiasClamp = 0.0f;
+	rasterizerCreateInfo.depthBiasSlopeFactor = 0.0f;
+
+
+	// Creating our Sampler:
+	// https://www.khronos.org/registry/vulkan/specs/1.0/man/html/VkPipelineMultisampleStateCreateInfo.html
+	VkPipelineMultisampleStateCreateInfo multiSampleCreateInfo = {};
+	multiSampleCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multiSampleCreateInfo.sampleShadingEnable = VK_FALSE;
+	multiSampleCreateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multiSampleCreateInfo.minSampleShading = 1.0f;
+	multiSampleCreateInfo.pSampleMask = nullptr;
+	multiSampleCreateInfo.alphaToCoverageEnable = VK_FALSE;
+	multiSampleCreateInfo.alphaToOneEnable = VK_FALSE;
+
+
+	// Dictating the color blending
+	VkPipelineColorBlendAttachmentState colorBlendingAttachement = {};
+	colorBlendingAttachement.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	colorBlendingAttachement.blendEnable = VK_FALSE;
+	colorBlendingAttachement.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendingAttachement.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendingAttachement.colorBlendOp = VK_BLEND_OP_ADD;
+	colorBlendingAttachement.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendingAttachement.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendingAttachement.alphaBlendOp = VK_BLEND_OP_ADD;
+	// https://www.khronos.org/registry/vulkan/specs/1.0/man/html/VkBlendFactor.html
+	// https://www.khronos.org/registry/vulkan/specs/1.0/man/html/VkBlendOp.html
+	colorBlendingAttachement.blendEnable = VK_TRUE;
+	colorBlendingAttachement.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	colorBlendingAttachement.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	colorBlendingAttachement.colorBlendOp = VK_BLEND_OP_ADD;
+	colorBlendingAttachement.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendingAttachement.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendingAttachement.alphaBlendOp = VK_BLEND_OP_ADD;
+
+	VkPipelineColorBlendStateCreateInfo colorBlendingCreateInfo = {};
+	colorBlendingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlendingCreateInfo.logicOpEnable = VK_FALSE;
+	colorBlendingCreateInfo.logicOp = VK_LOGIC_OP_COPY;
+	colorBlendingCreateInfo.attachmentCount = 1;
+	colorBlendingCreateInfo.pAttachments = &colorBlendingAttachement;
+	colorBlendingCreateInfo.blendConstants[ 0 ] = 0.0f;
+	colorBlendingCreateInfo.blendConstants[ 1 ] = 0.0f;
+	colorBlendingCreateInfo.blendConstants[ 2 ] = 0.0f;
+	colorBlendingCreateInfo.blendConstants[ 3 ] = 0.0f;
+
+	_mGraphicalPipeline = {};
+
+	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
+	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutCreateInfo.setLayoutCount = 0;
+	pipelineLayoutCreateInfo.pSetLayouts = nullptr;
+	pipelineLayoutCreateInfo.pushConstantRangeCount = 0;
+	pipelineLayoutCreateInfo.pPushConstantRanges = 0;
+
+	returnResult = vkCreatePipelineLayout( _mLogicalDevice,
+										   &pipelineLayoutCreateInfo,
+										   nullptr,
+										   &_mGraphicalPipeline );
 
 	vkDestroyShaderModule( _mLogicalDevice, vertexShaderModule, nullptr );
 	vkDestroyShaderModule( _mLogicalDevice, fragmentShaderModule, nullptr );
@@ -774,7 +935,7 @@ pair<VkResult, VkShaderModule> VK_Renderer::BuildShaderModule( const vector<char
 	returnData.first = vkResult;
 	returnData.second = shaderModule;
 
-	IfVKErrorPrintMSG( vkResult, "Could not create shader module!");
+	IfVKErrorPrintMSG( vkResult, "Could not create shader module!" );
 
 	return returnData;
 }

@@ -92,9 +92,6 @@ private:
 	VkDevice									_mLogicalDevice;
 	VkQueue										_mGraphicsQueue;
 	VkQueue										_mPresentQueue;
-	VkCommandPool								_mGraphicsQueueCmdPool;
-	VkCommandBuffer								_mGraphicsQueueCmdBuffer;
-	VkRenderPass								_mRenderPass;
 	VkSurfaceKHR								_mWindowSurface;
 
 	VkSwapchainKHR								_mSwapChainHandle;
@@ -106,6 +103,9 @@ private:
 	VkSurfaceFormatKHR							_mDeviceSurfaceFormats;
 	VkPresentModeKHR							_mPresentModeKHR;
 	VkSurfaceCapabilitiesKHR					_mSurfaceCapabilities;
+
+	VkRenderPass								_mRenderPass;
+	VkPipelineLayout							_mGraphicalPipeline;
 
 
 	// Methods
@@ -133,6 +133,7 @@ private:
 	VkResult									InitLogicalDevice();
 	VkResult									InitSwapChain();
 	VkResult									InitImageViews();
+	VkResult									InitRenderPasses();
 	VkResult									InitGraphicsPipeline();
 
 	// Vk Helpers
