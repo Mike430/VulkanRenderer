@@ -46,7 +46,8 @@ VK_Renderer::~VK_Renderer()
 	Utilities::LogInfoIfDebug( "VK_Renderer destructor called" );
 
 	// Shutdown Vulkan
-	vkDestroyPipelineLayout( _mLogicalDevice, _mGraphicalPipeline, nullptr );
+	vkDestroyPipeline(_mLogicalDevice, _mGraphicalPipeline, nullptr);
+	vkDestroyPipelineLayout( _mLogicalDevice, _mPipelineLayout, nullptr );
 	vkDestroyRenderPass( _mLogicalDevice, _mRenderPass, nullptr );
 	for( VkImageView imageView : _mSwapChainImageViews )
 	{
@@ -690,7 +691,7 @@ VkResult VK_Renderer::InitGraphicsPipeline()
 
 	// Creating the Rasterizer
 	VkPipelineRasterizationStateCreateInfo rasterizerCreateInfo = {};
-	rasterizerCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	rasterizerCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterizerCreateInfo.depthClampEnable = VK_FALSE;
 	// If depthClampEnable were set to true, this renders everything past the far plane with a depth of the far plane. Useful for shadow mapping but requires a GPU feature.
 	rasterizerCreateInfo.rasterizerDiscardEnable = VK_FALSE;
@@ -749,7 +750,7 @@ VkResult VK_Renderer::InitGraphicsPipeline()
 	colorBlendingCreateInfo.blendConstants[ 2 ] = 0.0f;
 	colorBlendingCreateInfo.blendConstants[ 3 ] = 0.0f;
 
-	_mGraphicalPipeline = {};
+	_mPipelineLayout = {};
 
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
 	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -761,7 +762,35 @@ VkResult VK_Renderer::InitGraphicsPipeline()
 	returnResult = vkCreatePipelineLayout( _mLogicalDevice,
 										   &pipelineLayoutCreateInfo,
 										   nullptr,
-										   &_mGraphicalPipeline );
+										   &_mPipelineLayout );
+
+	if( returnResult != VK_SUCCESS ) return returnResult;
+
+	VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
+	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineCreateInfo.stageCount = 2;
+	pipelineCreateInfo.pStages = shaderStages;
+	pipelineCreateInfo.pVertexInputState = &vertexInputStateCreateInfo;
+	pipelineCreateInfo.pInputAssemblyState = &pipelineInputAsmCreateInfo;
+	pipelineCreateInfo.pViewportState = &viewportCreateInfo;
+	pipelineCreateInfo.pRasterizationState = &rasterizerCreateInfo;
+	pipelineCreateInfo.pMultisampleState = &multiSampleCreateInfo;
+	pipelineCreateInfo.pDepthStencilState = nullptr;
+	pipelineCreateInfo.pColorBlendState = &colorBlendingCreateInfo;
+	pipelineCreateInfo.pDynamicState = nullptr;
+	pipelineCreateInfo.layout = _mPipelineLayout;
+	pipelineCreateInfo.renderPass = _mRenderPass;
+	pipelineCreateInfo.subpass = 0;
+	pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineCreateInfo.basePipelineIndex = -1;
+
+	returnResult = vkCreateGraphicsPipelines(_mLogicalDevice,
+							   VK_NULL_HANDLE,
+							   1,
+							   &pipelineCreateInfo,
+							   nullptr,
+							   &_mGraphicalPipeline );
+
 
 	vkDestroyShaderModule( _mLogicalDevice, vertexShaderModule, nullptr );
 	vkDestroyShaderModule( _mLogicalDevice, fragmentShaderModule, nullptr );

@@ -105,7 +105,8 @@ private:
 	VkSurfaceCapabilitiesKHR					_mSurfaceCapabilities;
 
 	VkRenderPass								_mRenderPass;
-	VkPipelineLayout							_mGraphicalPipeline;
+	VkPipelineLayout							_mPipelineLayout;
+	VkPipeline									_mGraphicalPipeline;
 
 
 	// Methods
