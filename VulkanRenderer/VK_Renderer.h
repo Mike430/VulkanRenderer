@@ -99,6 +99,7 @@ private:
 	vector<VkImageView>							_mSwapChainImageViews;
 	VkFormat									_mSwapChainImageFormat;
 	VkExtent2D									_mSwapChainImageExtent;
+	vector<VkFramebuffer>						_mSwapChainFrameBuffers;
 
 	VkSurfaceFormatKHR							_mDeviceSurfaceFormats;
 	VkPresentModeKHR							_mPresentModeKHR;
@@ -107,6 +108,8 @@ private:
 	VkRenderPass								_mRenderPass;
 	VkPipelineLayout							_mPipelineLayout;
 	VkPipeline									_mGraphicalPipeline;
+	VkCommandPool								_mCommandPool;
+	vector<VkCommandBuffer>						_mCommandBuffers;
 
 
 	// Methods
@@ -136,6 +139,9 @@ private:
 	VkResult									InitImageViews();
 	VkResult									InitRenderPasses();
 	VkResult									InitGraphicsPipeline();
+	VkResult									InitFrameBuffers();
+	VkResult									InitCommandPool();
+	VkResult									InitCommandBuffers();
 
 	// Vk Helpers
 	uint64_t									RatePhysicalDeviceForGameGraphics( VkPhysicalDevice* physicalDevice );

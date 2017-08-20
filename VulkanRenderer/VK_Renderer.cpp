@@ -46,13 +46,22 @@ VK_Renderer::~VK_Renderer()
 	Utilities::LogInfoIfDebug( "VK_Renderer destructor called" );
 
 	// Shutdown Vulkan
-	vkDestroyPipeline(_mLogicalDevice, _mGraphicalPipeline, nullptr);
+
+	vkDestroyCommandPool( _mLogicalDevice, _mCommandPool, nullptr );
+	for( VkFramebuffer frameBuffer : _mSwapChainFrameBuffers )
+	{
+		vkDestroyFramebuffer( _mLogicalDevice, frameBuffer, nullptr );
+	}
+
+	vkDestroyPipeline( _mLogicalDevice, _mGraphicalPipeline, nullptr );
 	vkDestroyPipelineLayout( _mLogicalDevice, _mPipelineLayout, nullptr );
 	vkDestroyRenderPass( _mLogicalDevice, _mRenderPass, nullptr );
+
 	for( VkImageView imageView : _mSwapChainImageViews )
 	{
 		vkDestroyImageView( _mLogicalDevice, imageView, nullptr );
 	}
+
 	vkDestroySwapchainKHR( _mLogicalDevice, _mSwapChainHandle, nullptr );
 	vkDestroySurfaceKHR( _mVkInstance, _mWindowSurface, nullptr );
 	vkDestroyDevice( _mLogicalDevice, nullptr );
@@ -61,6 +70,7 @@ VK_Renderer::~VK_Renderer()
 
 
 	// Shutdown GLFW
+
 	glfwTerminate(); // window delete cannot be done before glfwTerminate as glfwTerminate cleans windows
 	glfwDestroyWindow( _mWindow ); // Can use delete because terminate alters all windows
 
@@ -202,6 +212,21 @@ VkResult VK_Renderer::InitVulkanRenderer()
 	if( IfVKErrorPrintMSG( returnResult,
 						   "Failed to initialise graphics pipeline.",
 						   "Graphics pipeline initialised." ) )				return returnResult;
+
+	returnResult = InitFrameBuffers();
+	if( IfVKErrorPrintMSG( returnResult,
+						   "Failed to initialise frame buffers.",
+						   "Frame buffers initialised." ) )					return returnResult;
+
+	returnResult = InitCommandPool();
+	if( IfVKErrorPrintMSG( returnResult,
+						   "Failed to initialise command pool.",
+						   "Command pool initialised." ) )				return returnResult;
+
+	returnResult = InitCommandBuffers();
+	if( IfVKErrorPrintMSG( returnResult,
+						   "Failed to initialise command buffers.",
+						   "Command buffers initialised." ) )				return returnResult;
 
 	return returnResult;
 }
@@ -784,16 +809,108 @@ VkResult VK_Renderer::InitGraphicsPipeline()
 	pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
 	pipelineCreateInfo.basePipelineIndex = -1;
 
-	returnResult = vkCreateGraphicsPipelines(_mLogicalDevice,
-							   VK_NULL_HANDLE,
-							   1,
-							   &pipelineCreateInfo,
-							   nullptr,
-							   &_mGraphicalPipeline );
+	returnResult = vkCreateGraphicsPipelines( _mLogicalDevice,
+											  VK_NULL_HANDLE,
+											  1,
+											  &pipelineCreateInfo,
+											  nullptr,
+											  &_mGraphicalPipeline );
 
 
 	vkDestroyShaderModule( _mLogicalDevice, vertexShaderModule, nullptr );
 	vkDestroyShaderModule( _mLogicalDevice, fragmentShaderModule, nullptr );
+
+	return returnResult;
+}
+
+
+VkResult VK_Renderer::InitFrameBuffers()
+{
+	VkResult returnResult;
+	_mSwapChainFrameBuffers = {};
+	_mSwapChainFrameBuffers.resize( _mSwapChainImages.size() );
+
+	for( int i = 0; i < _mSwapChainImageViews.size(); i++ )
+	{
+		VkImageView* attachedImageView = &_mSwapChainImageViews[ i ];
+
+		VkFramebufferCreateInfo frameBufferInfo = {};
+		frameBufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		frameBufferInfo.renderPass = _mRenderPass;
+		frameBufferInfo.attachmentCount = 1;
+		frameBufferInfo.pAttachments = attachedImageView;
+		frameBufferInfo.width = _mSwapChainImageExtent.width;
+		frameBufferInfo.height = _mSwapChainImageExtent.height;
+		frameBufferInfo.layers = 1;
+
+		returnResult = vkCreateFramebuffer( _mLogicalDevice, &frameBufferInfo, nullptr, &_mSwapChainFrameBuffers[ i ] );
+
+		if( returnResult != VK_SUCCESS ) return returnResult;
+	}
+
+	return returnResult;
+}
+
+
+VkResult VK_Renderer::InitCommandPool()
+{
+	VkCommandPoolCreateInfo poolCreateInfo = {};
+	poolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolCreateInfo.flags = 0;
+	poolCreateInfo.queueFamilyIndex = _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex;
+
+	return vkCreateCommandPool( _mLogicalDevice, &poolCreateInfo, nullptr, &_mCommandPool );
+}
+
+
+VkResult VK_Renderer::InitCommandBuffers()
+{
+	VkResult returnResult = VK_SUCCESS;
+
+	_mCommandBuffers = {};
+	_mCommandBuffers.resize( _mSwapChainFrameBuffers.size() );
+
+	VkCommandBufferAllocateInfo allocationInfo = {};
+	allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocationInfo.commandPool = _mCommandPool;
+	allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocationInfo.commandBufferCount = ( uint32_t ) _mCommandBuffers.size();
+
+	returnResult = vkAllocateCommandBuffers( _mLogicalDevice, &allocationInfo, _mCommandBuffers.data() );
+
+	if( returnResult != VK_SUCCESS ) return returnResult;
+
+	for( int i = 0; i < _mCommandBuffers.size(); i++ )
+	{
+		VkCommandBufferBeginInfo startinUpInfo = {};
+		startinUpInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		startinUpInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+		startinUpInfo.pInheritanceInfo = nullptr;
+
+		vkBeginCommandBuffer( _mCommandBuffers[ i ], &startinUpInfo );
+
+		VkClearValue screenClearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+		VkRenderPassBeginInfo startingRenderPassInfo = {};
+		startingRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		startingRenderPassInfo.renderPass = _mRenderPass;
+		startingRenderPassInfo.framebuffer = _mSwapChainFrameBuffers[ i ];
+		startingRenderPassInfo.renderArea.offset = { 0,0 };
+		startingRenderPassInfo.renderArea.extent = _mSwapChainImageExtent;
+		startingRenderPassInfo.clearValueCount = 1;
+		startingRenderPassInfo.pClearValues = &screenClearColor;
+
+		vkCmdBeginRenderPass( _mCommandBuffers[ i ], &startingRenderPassInfo, VK_SUBPASS_CONTENTS_INLINE );
+
+		// Draw commands
+		vkCmdBindPipeline( _mCommandBuffers[ i ], VK_PIPELINE_BIND_POINT_GRAPHICS, _mGraphicalPipeline );
+		vkCmdDraw( _mCommandBuffers[ i ], 3, 1, 0, 0 );
+		vkCmdEndRenderPass( _mCommandBuffers[ i ] );
+
+		returnResult = vkEndCommandBuffer( _mCommandBuffers[ i ] );
+
+		if( returnResult != VK_SUCCESS ) return returnResult;
+	}
 
 	return returnResult;
 }
