@@ -47,6 +47,8 @@ VK_Renderer::~VK_Renderer()
 
 	// Shutdown Vulkan
 
+	vkDestroySemaphore( _mLogicalDevice, _mImageAvailableSemaphore, nullptr );
+	vkDestroySemaphore( _mLogicalDevice, _mRenderFinishedSemaphore, nullptr );
 	vkDestroyCommandPool( _mLogicalDevice, _mCommandPool, nullptr );
 	for( VkFramebuffer frameBuffer : _mSwapChainFrameBuffers )
 	{
@@ -221,12 +223,17 @@ VkResult VK_Renderer::InitVulkanRenderer()
 	returnResult = InitCommandPool();
 	if( IfVKErrorPrintMSG( returnResult,
 						   "Failed to initialise command pool.",
-						   "Command pool initialised." ) )				return returnResult;
+						   "Command pool initialised." ) )					return returnResult;
 
 	returnResult = InitCommandBuffers();
 	if( IfVKErrorPrintMSG( returnResult,
 						   "Failed to initialise command buffers.",
 						   "Command buffers initialised." ) )				return returnResult;
+
+	returnResult = InitSemaphores();
+	if( IfVKErrorPrintMSG( returnResult,
+						   "Failed to initialise semaphores.",
+						   "Semaphores initialised." ) )					return returnResult;
 
 	return returnResult;
 }
@@ -607,12 +614,23 @@ VkResult VK_Renderer::InitRenderPasses()
 	subpassCreateInfo.pColorAttachments = &colorAttachmentRefInfo;
 
 
+	VkSubpassDependency renderPassDependency = {};
+	renderPassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	renderPassDependency.dstSubpass = 0;
+	renderPassDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	renderPassDependency.dstSubpass = 0;
+	renderPassDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	renderPassDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+
 	VkRenderPassCreateInfo renderPassCreateInfo = {};
 	renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassCreateInfo.attachmentCount = 1;
 	renderPassCreateInfo.pAttachments = &colorAttachmentInfo;
 	renderPassCreateInfo.subpassCount = 1;
 	renderPassCreateInfo.pSubpasses = &subpassCreateInfo;
+	renderPassCreateInfo.dependencyCount = 1;
+	renderPassCreateInfo.pDependencies = &renderPassDependency;
 
 	returnResult = vkCreateRenderPass( _mLogicalDevice, &renderPassCreateInfo, nullptr, &_mRenderPass );
 
@@ -916,6 +934,27 @@ VkResult VK_Renderer::InitCommandBuffers()
 }
 
 
+VkResult VK_Renderer::InitSemaphores()
+{
+	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
+	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkResult returnResult = vkCreateSemaphore( _mLogicalDevice,
+											   &semaphoreCreateInfo,
+											   nullptr,
+											   &_mImageAvailableSemaphore );
+
+	if( returnResult != VK_SUCCESS ) return returnResult;
+
+	returnResult = vkCreateSemaphore( _mLogicalDevice,
+											   &semaphoreCreateInfo,
+											   nullptr,
+											   &_mRenderFinishedSemaphore );
+
+	return returnResult;
+}
+
+
 // Utilities
 uint64_t VK_Renderer::RatePhysicalDeviceForGameGraphics( VkPhysicalDevice* physicalDevice )
 {
@@ -1112,16 +1151,67 @@ void VK_Renderer::GameLoop()
 {
 	//glfwSetWindowCloseCallback( _mWindow, window_close_callback );
 	//RenderScene();
+	VkResult cleanExecution;
 	while( glfwGetKey( _mWindow, GLFW_KEY_ESCAPE ) != GLFW_PRESS && glfwWindowShouldClose( _mWindow ) == 0 )
 	{
-		RenderScene();
+		cleanExecution = RenderScene();
+		
+		if( IfVKErrorPrintMSG( cleanExecution, "Render failed! Aborting main loop! VkResult code: " + to_string( cleanExecution ) ) ) break;
+
 		glfwPollEvents();
 	}
 	vkDeviceWaitIdle( _mLogicalDevice );
 }
 
 
-void VK_Renderer::RenderScene()
+VkResult VK_Renderer::RenderScene()
 {
-	cout << endl << endl << "NEXT_RENDER_PASS" << endl;
+	/*
+	1: Acquire an image from the swap chain
+	2: Execute the command buffer with that image as attachment in the framebuffer
+	3: Return the image to the swap chain for presentation
+	*/
+	VkResult returnResult;
+	uint32_t imageIndex = 1;
+	vkAcquireNextImageKHR( _mLogicalDevice,
+						   _mSwapChainHandle,
+						   UINT64_MAX,
+						   _mImageAvailableSemaphore,
+						   VK_NULL_HANDLE,
+						   &imageIndex );
+
+
+	VkSemaphore waitSemaphores[] = { _mImageAvailableSemaphore };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	VkSemaphore signalSemphores[] = { _mRenderFinishedSemaphore };
+	VkSwapchainKHR swapChains[] = {_mSwapChainHandle};
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitDstStageMask = waitStages;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_mCommandBuffers[ imageIndex ];
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = signalSemphores;
+
+	returnResult = vkQueueSubmit( _mGraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE );
+	if( IfVKErrorPrintMSG( returnResult, "ERROR AT RENDER: Could not submit queue." ) )
+	{
+		return returnResult;
+	}
+
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.swapchainCount = _mSwapChainImages.size();
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = signalSemphores;
+	presentInfo.pSwapchains = swapChains;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.pResults = nullptr;
+
+	vkQueuePresentKHR(_mPresentQueue, &presentInfo);
+	vkQueueWaitIdle( _mPresentQueue );
 }

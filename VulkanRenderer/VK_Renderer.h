@@ -111,6 +111,9 @@ private:
 	VkCommandPool								_mCommandPool;
 	vector<VkCommandBuffer>						_mCommandBuffers;
 
+	VkSemaphore									_mImageAvailableSemaphore;
+	VkSemaphore									_mRenderFinishedSemaphore;
+
 
 	// Methods
 	// Vulkan
@@ -142,6 +145,7 @@ private:
 	VkResult									InitFrameBuffers();
 	VkResult									InitCommandPool();
 	VkResult									InitCommandBuffers();
+	VkResult									InitSemaphores();
 
 	// Vk Helpers
 	uint64_t									RatePhysicalDeviceForGameGraphics( VkPhysicalDevice* physicalDevice );
@@ -165,5 +169,5 @@ public:
 
 	bool										isCorrectlyInitialised;
 	void										GameLoop();
-	void										RenderScene();
+	VkResult									RenderScene();
 };
