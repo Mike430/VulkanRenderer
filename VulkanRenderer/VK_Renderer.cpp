@@ -2,6 +2,9 @@
 
 
 
+const string VK_Renderer::_mVkReportPrefix = "Vk_Renderer Report: ";
+
+
 VK_Renderer::VK_Renderer()
 {
 	Utilities::LogInfoIfDebug( "VK_Renderer constructor called" );
@@ -49,6 +52,7 @@ VK_Renderer::~VK_Renderer()
 
 	vkDestroySemaphore( _mLogicalDevice, _mImageAvailableSemaphore, nullptr );
 	vkDestroySemaphore( _mLogicalDevice, _mRenderFinishedSemaphore, nullptr );
+	vkFreeCommandBuffers( _mLogicalDevice, _mCommandPool, _mCommandBuffers.size(), _mCommandBuffers.data() );
 	vkDestroyCommandPool( _mLogicalDevice, _mCommandPool, nullptr );
 	for( VkFramebuffer frameBuffer : _mSwapChainFrameBuffers )
 	{
@@ -478,9 +482,9 @@ VkResult VK_Renderer::InitSwapChain()
 	if( swapChainSupport._mCapabilities.maxImageCount > 0 && imageCount > swapChainSupport._mCapabilities.maxImageCount )
 	{
 		imageCount = swapChainSupport._mCapabilities.maxImageCount;// Use if we can't have more than the max
-		Utilities::LogWarningIfDebug( "Can't do tripple buffering" );
+		//Utilities::LogWarningIfDebug( "Can't do tripple buffering" );
 	}
-	Utilities::LogInfoIfDebug( "SwapChain length = " + to_string( imageCount ) );
+	//Utilities::LogInfoIfDebug( "SwapChain length = " + to_string( imageCount ) );
 
 	uint32_t queueFamilyIndices[] = {
 		( uint32_t ) _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex,
@@ -501,14 +505,14 @@ VkResult VK_Renderer::InitSwapChain()
 	// Variants for the create info
 	if( _mPhysicalDeviceQueueFamilyIndexes._mGraphicsFamilyIndex != _mPhysicalDeviceQueueFamilyIndexes._mPresentFamilyIndex )
 	{
-		Utilities::LogInfoIfDebug( "The GPU's QueueFamily IS NOT PresentFamily" );
+		//Utilities::LogInfoIfDebug( "The GPU's QueueFamily IS NOT PresentFamily" );
 		createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
 		createInfo.queueFamilyIndexCount = 2;
 		createInfo.pQueueFamilyIndices = queueFamilyIndices;
 	}
 	else
 	{
-		Utilities::LogInfoIfDebug( "The GPU's QueueFamily IS THE SAME AS PresentFamily" );
+		//Utilities::LogInfoIfDebug( "The GPU's QueueFamily IS THE SAME AS PresentFamily" );
 		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		createInfo.queueFamilyIndexCount = 0;
 		createInfo.pQueueFamilyIndices = nullptr;
@@ -947,9 +951,9 @@ VkResult VK_Renderer::InitSemaphores()
 	if( returnResult != VK_SUCCESS ) return returnResult;
 
 	returnResult = vkCreateSemaphore( _mLogicalDevice,
-											   &semaphoreCreateInfo,
-											   nullptr,
-											   &_mRenderFinishedSemaphore );
+									  &semaphoreCreateInfo,
+									  nullptr,
+									  &_mRenderFinishedSemaphore );
 
 	return returnResult;
 }
@@ -1126,17 +1130,69 @@ pair<VkResult, VkShaderModule> VK_Renderer::BuildShaderModule( const vector<char
 }
 
 
+void VK_Renderer::CleanSwapChainResources()
+{
+	for( int i = 0; i < _mSwapChainFrameBuffers.size(); i++ )
+	{
+		vkDestroyFramebuffer( _mLogicalDevice, _mSwapChainFrameBuffers[ i ], nullptr );
+	}
+
+	vkFreeCommandBuffers( _mLogicalDevice, _mCommandPool, _mCommandBuffers.size(), _mCommandBuffers.data() );
+	vkDestroyPipeline( _mLogicalDevice, _mGraphicalPipeline, nullptr );
+	vkDestroyPipelineLayout( _mLogicalDevice, _mPipelineLayout, nullptr );
+	vkDestroyRenderPass( _mLogicalDevice, _mRenderPass, nullptr );
+
+	for( int i = 0; i < _mSwapChainImageViews.size(); i++ )
+	{
+		vkDestroyImageView( _mLogicalDevice, _mSwapChainImageViews[ i ], nullptr );
+	}
+
+	vkDestroySwapchainKHR( _mLogicalDevice, _mSwapChainHandle, nullptr );
+}
+
+// Event triggered
+VkResult VK_Renderer::BuildNewSwapChain()
+{
+	VkResult returnResult;
+	vkDeviceWaitIdle( _mLogicalDevice );
+
+	CleanSwapChainResources();
+
+	// Call same methods as used on initialisation
+	returnResult = InitSwapChain();
+	if( returnResult != VK_SUCCESS ) return returnResult;
+
+	returnResult = InitImageViews();
+	if( returnResult != VK_SUCCESS ) return returnResult;
+
+	returnResult = InitRenderPasses();
+	if( returnResult != VK_SUCCESS ) return returnResult;
+
+	returnResult = InitGraphicsPipeline();
+	if( returnResult != VK_SUCCESS ) return returnResult;
+
+	returnResult = InitFrameBuffers();
+	if( returnResult != VK_SUCCESS ) return returnResult;
+
+	returnResult = InitCommandBuffers();
+
+	return returnResult;
+}
+
+
+
 // Needs to be made a part of the core game engine as the renderer shouldn't have responcibility over window and input management.
 void VK_Renderer::CreateGLFWWindow()
 {
 	// Creates a window "without a context" - Go here to find out more: http://www.glfw.org/docs/latest/context_guide.html#context_less
 	glfwWindowHint( GLFW_CLIENT_API, GLFW_NO_API );
-	//glfwWindowHint( GLFW_RESIZABLE, GLFW_FALSE );
-	_mWindow = glfwCreateWindow( _mWidth, _mHeight, "Vulkan Renderer", NULL, NULL );
+	_mWindow = glfwCreateWindow( _mWidth, _mHeight, "Vulkan Renderer", nullptr, nullptr );
+	glfwSetWindowUserPointer( _mWindow, this );
+	glfwSetWindowSizeCallback( _mWindow, VK_Renderer::OnWindowResize );
 
-	/*glfwMakeContextCurrent( _mWindow );
+	//glfwMakeContextCurrent( _mWindow );
 	glfwSetInputMode( _mWindow, GLFW_STICKY_KEYS, VK_TRUE );
-	glfwSetInputMode( _mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL );*/
+	glfwSetInputMode( _mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL );
 }
 
 
@@ -1146,7 +1202,33 @@ VkResult VK_Renderer::InitialiseWindowSurface()
 }
 
 
-// Finale
+void VK_Renderer::OnWindowResize( GLFWwindow* window, int width, int height )
+{
+	bool success = false;
+	VK_Renderer* tempRef = nullptr;
+
+	try
+	{
+		tempRef = reinterpret_cast< VK_Renderer* >( glfwGetWindowUserPointer( window ) );
+
+		tempRef->_mWidth = width;
+		tempRef->_mHeight = height;
+		success = !IfVKErrorPrintMSG( tempRef->BuildNewSwapChain(), "Failed to build new swap chain" );
+	}
+	catch( exception e )
+	{
+		Utilities::LogErrorIfDebug( e.what() );
+	}
+
+	if( !success )
+	{
+		delete tempRef;
+		tempRef = nullptr;
+	}
+}
+
+
+// Core
 void VK_Renderer::GameLoop()
 {
 	//glfwSetWindowCloseCallback( _mWindow, window_close_callback );
@@ -1155,7 +1237,7 @@ void VK_Renderer::GameLoop()
 	while( glfwGetKey( _mWindow, GLFW_KEY_ESCAPE ) != GLFW_PRESS && glfwWindowShouldClose( _mWindow ) == 0 )
 	{
 		cleanExecution = RenderScene();
-		
+
 		if( IfVKErrorPrintMSG( cleanExecution, "Render failed! Aborting main loop! VkResult code: " + to_string( cleanExecution ) ) ) break;
 
 		glfwPollEvents();
@@ -1173,18 +1255,28 @@ VkResult VK_Renderer::RenderScene()
 	*/
 	VkResult returnResult;
 	uint32_t imageIndex = 1;
-	vkAcquireNextImageKHR( _mLogicalDevice,
-						   _mSwapChainHandle,
-						   UINT64_MAX,
-						   _mImageAvailableSemaphore,
-						   VK_NULL_HANDLE,
-						   &imageIndex );
+	returnResult = vkAcquireNextImageKHR( _mLogicalDevice,
+										  _mSwapChainHandle,
+										  UINT64_MAX,
+										  _mImageAvailableSemaphore,
+										  VK_NULL_HANDLE,
+										  &imageIndex );
+
+	if( returnResult == VK_ERROR_OUT_OF_DATE_KHR )
+	{
+		BuildNewSwapChain();
+		return returnResult;
+	}
+	else if( returnResult != VK_SUCCESS )
+	{
+		Utilities::LogWarningIfDebug("Couldn't get the next image in the swap chain!");
+	}
 
 
 	VkSemaphore waitSemaphores[] = { _mImageAvailableSemaphore };
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	VkSemaphore signalSemphores[] = { _mRenderFinishedSemaphore };
-	VkSwapchainKHR swapChains[] = {_mSwapChainHandle};
+	VkSwapchainKHR swapChains[] = { _mSwapChainHandle };
 
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1212,6 +1304,17 @@ VkResult VK_Renderer::RenderScene()
 	presentInfo.pImageIndices = &imageIndex;
 	presentInfo.pResults = nullptr;
 
-	vkQueuePresentKHR(_mPresentQueue, &presentInfo);
+	returnResult = vkQueuePresentKHR( _mPresentQueue, &presentInfo );
+
+	if( returnResult == VK_ERROR_OUT_OF_DATE_KHR || returnResult == VK_SUBOPTIMAL_KHR )
+	{
+		BuildNewSwapChain();
+	}
+	else if( returnResult != VK_SUCCESS )
+	{
+		Utilities::LogWarningIfDebug("Failed to present the next swap chain image.");
+	}
+
 	vkQueueWaitIdle( _mPresentQueue );
+	return returnResult;
 }

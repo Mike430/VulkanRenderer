@@ -57,7 +57,7 @@ class VK_Renderer
 {
 private:
 	const uint8_t _mSwapChainSize = 2;
-	const string _mVkReportPrefix = "Vk_Renderer Report: ";
+	static const string _mVkReportPrefix;
 
 	// GLFW Variables
 	GLFWwindow*									_mWindow;
@@ -147,6 +147,9 @@ private:
 	VkResult									InitCommandBuffers();
 	VkResult									InitSemaphores();
 
+	// Vk Event Methods
+	VkResult									BuildNewSwapChain();
+
 	// Vk Helpers
 	uint64_t									RatePhysicalDeviceForGameGraphics( VkPhysicalDevice* physicalDevice );
 	DeviceQueueFamilyIndexes					FindDeviceQueueFamilies( VkPhysicalDevice* physicalDevice );
@@ -155,14 +158,18 @@ private:
 	VkPresentModeKHR							ChooseSwapChainPresentationMode( vector<VkPresentModeKHR> availableModes );
 	VkExtent2D									ChooseSwapChainExtentionDimensions( VkSurfaceCapabilitiesKHR capabilities );
 	pair<VkResult, VkShaderModule>				BuildShaderModule(const vector<char>& byteCode);
+	void										CleanSwapChainResources();
 
 	// GLFW
 	void										CreateGLFWWindow();
 	VkResult									InitialiseWindowSurface();
 
+	// GLFW Event Methods
+	static void									OnWindowResize(GLFWwindow* window, int width, int height);
+
 	// Custom
-	bool										IfVKErrorPrintMSG( VkResult VkState, string errOutput );
-	bool										IfVKErrorPrintMSG( VkResult VkState, string errOutput, string successOutput );
+	static bool									IfVKErrorPrintMSG( VkResult VkState, string errOutput );
+	static bool									IfVKErrorPrintMSG( VkResult VkState, string errOutput, string successOutput );
 public:
 	VK_Renderer();
 	~VK_Renderer();
