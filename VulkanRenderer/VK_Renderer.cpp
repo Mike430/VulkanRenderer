@@ -250,7 +250,7 @@ VkResult VK_Renderer::InitInstance()
 	// Layers
 	uint32_t layerCount;
 	vkEnumerateInstanceLayerProperties( &layerCount, nullptr );
-	cout << "We have " << layerCount << " layers available to the instance. They are:" << endl;
+	Utilities::LogIfDebug( "We have " + to_string( layerCount ) + " layers available to the instance. They are:", COLOUR_WHITE );
 	vector<VkLayerProperties> vkLayerProps( layerCount );
 	vkEnumerateInstanceLayerProperties( &layerCount, vkLayerProps.data() );
 
@@ -267,7 +267,7 @@ VkResult VK_Renderer::InitInstance()
 	// Extensions
 	uint32_t extensionCount;
 	vkEnumerateInstanceExtensionProperties( nullptr, &extensionCount, nullptr );
-	cout << "We have " << extensionCount << " extensions available to the instance. They are:" << endl;
+	Utilities::LogIfDebug( "We have " + to_string( extensionCount ) + " extensions available to the instance. They are:", COLOUR_WHITE );
 	vector<VkExtensionProperties> vkInstanceExtensionProps( extensionCount );
 	vkEnumerateInstanceExtensionProperties( nullptr, &extensionCount, vkInstanceExtensionProps.data() );
 
@@ -349,7 +349,7 @@ VkResult VK_Renderer::ChooseAPhysicalDevice()
 	VkPhysicalDeviceProperties winningDeviceProps = {};
 	VkPhysicalDeviceProperties tempDeviceProps = {};
 
-	cout << endl << "There are " << physicalDeviceCount << " secondary processor(s) available, they are: " << endl;
+	Utilities::LogIfDebug( "There are " + to_string( physicalDeviceCount ) + " secondary processor(s) available, they are:", COLOUR_WHITE );
 
 	for( unsigned i = 0; i < physicalDevices.size(); i++ )
 	{
@@ -357,7 +357,7 @@ VkResult VK_Renderer::ChooseAPhysicalDevice()
 		bool isSuitable = indicies.HasAllNeededQueues();
 		uint64_t currentScore = RatePhysicalDeviceForGameGraphics( &physicalDevices.at( i ) );
 		vkGetPhysicalDeviceProperties( physicalDevices.at( i ), &tempDeviceProps );
-		cout << ( i + 1 ) << " : " << tempDeviceProps.deviceName << " - score: " << currentScore << " - Has req queues: " << ( isSuitable ? "true" : "false" ) << endl;
+		Utilities::LogIfDebug( to_string( i + 1 ) + " : " + tempDeviceProps.deviceName + " - score: " + to_string( currentScore ) + " - Has req queues: " + ( isSuitable ? "true" : "false" ), COLOUR_WHITE );
 
 		if( currentScore > highestScore && isSuitable )
 		{
@@ -374,7 +374,7 @@ VkResult VK_Renderer::ChooseAPhysicalDevice()
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
 
-	cout << "Chosen GPU: " << winningDeviceProps.deviceName << endl;
+	Utilities::LogIfDebug( "Chosen GPU: " + ( string ) winningDeviceProps.deviceName, COLOUR_WHITE );
 	_mPhysicalDevice = physicalDevices.at( winningIndex );
 	_mPhysicalDeviceQueueFamilyIndexes = finalIndicies;
 
@@ -421,7 +421,7 @@ VkResult VK_Renderer::InitLogicalDevice()
 	// Get the available layers
 	uint32_t layerCount;
 	vkEnumerateDeviceLayerProperties( _mPhysicalDevice, &layerCount, nullptr );
-	cout << endl << "We have " << layerCount << " layers on the chose graphics card. They are:" << endl;
+	Utilities::LogIfDebug( "We have " + to_string( layerCount ) + " layers on the chose graphics card. They are:", COLOUR_WHITE );
 	vector<VkLayerProperties> vkDeviceLayerProps( layerCount );
 	vkEnumerateDeviceLayerProperties( _mPhysicalDevice, &layerCount, vkDeviceLayerProps.data() );
 
@@ -435,7 +435,7 @@ VkResult VK_Renderer::InitLogicalDevice()
 	// Get the available extensions
 	uint32_t extensionCount;
 	vkEnumerateDeviceExtensionProperties( _mPhysicalDevice, nullptr, &extensionCount, nullptr );
-	cout << endl << "We have " << extensionCount << " extensions on the chosen graphics card. They are:" << endl;
+	Utilities::LogIfDebug( "We have " + to_string( extensionCount ) + " extensions on the chosen graphics card. They are:", COLOUR_WHITE );
 	vector<VkExtensionProperties> vkDeviceExtensionProps( extensionCount );
 	vkEnumerateDeviceExtensionProperties( _mPhysicalDevice, nullptr, &extensionCount, vkDeviceExtensionProps.data() );
 
@@ -1228,24 +1228,6 @@ void VK_Renderer::OnWindowResize( GLFWwindow* window, int width, int height )
 }
 
 
-// Core
-void VK_Renderer::GameLoop()
-{
-	//glfwSetWindowCloseCallback( _mWindow, window_close_callback );
-	//RenderScene();
-	VkResult cleanExecution;
-	while( glfwGetKey( _mWindow, GLFW_KEY_ESCAPE ) != GLFW_PRESS && glfwWindowShouldClose( _mWindow ) == 0 )
-	{
-		cleanExecution = RenderScene();
-
-		if( IfVKErrorPrintMSG( cleanExecution, "Render failed! Aborting main loop! VkResult code: " + to_string( cleanExecution ) ) ) break;
-
-		glfwPollEvents();
-	}
-	vkDeviceWaitIdle( _mLogicalDevice );
-}
-
-
 VkResult VK_Renderer::RenderScene()
 {
 	/*
@@ -1269,7 +1251,7 @@ VkResult VK_Renderer::RenderScene()
 	}
 	else if( returnResult != VK_SUCCESS )
 	{
-		Utilities::LogWarningIfDebug("Couldn't get the next image in the swap chain!");
+		Utilities::LogWarningIfDebug( "Couldn't get the next image in the swap chain!" );
 	}
 
 
@@ -1312,7 +1294,7 @@ VkResult VK_Renderer::RenderScene()
 	}
 	else if( returnResult != VK_SUCCESS )
 	{
-		Utilities::LogWarningIfDebug("Failed to present the next swap chain image.");
+		Utilities::LogWarningIfDebug( "Failed to present the next swap chain image." );
 	}
 
 	vkQueueWaitIdle( _mPresentQueue );

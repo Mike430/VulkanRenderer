@@ -84,7 +84,7 @@ vector<const char*> Utilities::FindCommonCStrings( vector<const char*> wantedLis
 		output += "\n";
 	}
 
-	cout << endl << output << endl;
+	LogIfDebug( output, COLOUR_WHITE );
 
 	return returnList;
 }

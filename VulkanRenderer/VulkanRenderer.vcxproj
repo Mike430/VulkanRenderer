@@ -133,11 +133,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="GameEngine.h" />
     <ClInclude Include="GraphicalUtilities.h" />
     <ClInclude Include="Utilities.h" />
     <ClInclude Include="VK_Renderer.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="GameEngine.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Utilities.cpp" />
     <ClCompile Include="VK_Renderer.cpp" />

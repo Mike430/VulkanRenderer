@@ -1,16 +1,17 @@
 #include <iostream>
-#include "VK_Renderer.h"
+#include "GameEngine.h"
 
 int main()
 {
-	VK_Renderer* vkRenderer = new VK_Renderer();
-	
-	if( vkRenderer->isCorrectlyInitialised == true )
+	GameEngine* myGameEngine = new GameEngine;
+
+	if( myGameEngine->isCorrectlyInitialised )
 	{
-		vkRenderer->GameLoop();
+		myGameEngine->RunGameLoop();
 	}
-	delete vkRenderer;
-	vkRenderer = nullptr;
+
+	delete myGameEngine;
+	myGameEngine = nullptr;
 
 	system( "pause" );
 	return 0;

@@ -157,7 +157,7 @@ private:
 	VkSurfaceFormatKHR							ChooseSwapChainSurfaceFormat( vector<VkSurfaceFormatKHR> availableFormats );
 	VkPresentModeKHR							ChooseSwapChainPresentationMode( vector<VkPresentModeKHR> availableModes );
 	VkExtent2D									ChooseSwapChainExtentionDimensions( VkSurfaceCapabilitiesKHR capabilities );
-	pair<VkResult, VkShaderModule>				BuildShaderModule(const vector<char>& byteCode);
+	pair<VkResult, VkShaderModule>				BuildShaderModule( const vector<char>& byteCode );
 	void										CleanSwapChainResources();
 
 	// GLFW
@@ -165,16 +165,18 @@ private:
 	VkResult									InitialiseWindowSurface();
 
 	// GLFW Event Methods
-	static void									OnWindowResize(GLFWwindow* window, int width, int height);
+	static void									OnWindowResize( GLFWwindow* window, int width, int height );
 
 	// Custom
 	static bool									IfVKErrorPrintMSG( VkResult VkState, string errOutput );
 	static bool									IfVKErrorPrintMSG( VkResult VkState, string errOutput, string successOutput );
 public:
+	bool										isCorrectlyInitialised;
+
 	VK_Renderer();
 	~VK_Renderer();
 
-	bool										isCorrectlyInitialised;
-	void										GameLoop();
+	GLFWwindow*	const							GetGLFWwindow() { return _mWindow; }
+
 	VkResult									RenderScene();
 };
