@@ -10,7 +10,8 @@ GameEngine::GameEngine()
 
 	if( _mVulkanRenderer->isCorrectlyInitialised == true )
 	{
-		_mWindow = _mVulkanRenderer->GetGLFWwindow();
+		_mWinManager = WindowManager::GetInstance();
+		_mWindow = _mWinManager->GetWindow();
 
 		isCorrectlyInitialised = true;
 		_mLastTime = HR_Clock::now();
@@ -37,11 +38,10 @@ GameEngine::~GameEngine()
 {
 	LogInfoIfDebug( "ENGINE CORE DESTRUCTOR CALLED" );
 
-	glfwTerminate();
-	glfwDestroyWindow( _mWindow );
-
 	delete _mVulkanRenderer;
 	_mVulkanRenderer = nullptr;
+
+	delete _mWinManager;
 
 	LogInfoIfDebug( "ENGINE CORE DESTRUCTOR COMPLETE" );
 }
@@ -49,7 +49,7 @@ GameEngine::~GameEngine()
 
 void GameEngine::RunGameLoop()
 {
-	while( glfwGetKey( _mWindow, GLFW_KEY_ESCAPE ) != GLFW_PRESS && glfwWindowShouldClose( _mWindow ) == 0 )
+	while( glfwGetKey( _mWindow, GLFW_KEY_ESCAPE ) != GLFW_PRESS && _mWinManager->WindowCloseRequested() )
 	{
 		_mCurrentTime = HR_Clock::now();
 		_mElapsedTime = _mCurrentTime - _mLastTime;
@@ -59,6 +59,8 @@ void GameEngine::RunGameLoop()
 		RenderGame();
 		IncrementTimeDebug();
 
+		
+
 		_mLastTime = _mCurrentTime;
 	}
 }
@@ -67,7 +69,7 @@ void GameEngine::RunGameLoop()
 void GameEngine::UpdateUserInput()
 {
 	_mInputStartTime = HR_Clock::now();
-	glfwPollEvents();	
+	_mWinManager->PollWindowInput();
 	_mInputEndTime = HR_Clock::now();
 	_mInputDuration = _mInputEndTime - _mInputStartTime;
 }

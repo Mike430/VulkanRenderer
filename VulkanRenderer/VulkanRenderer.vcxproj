@@ -137,12 +137,14 @@
     <ClInclude Include="GraphicalUtilities.h" />
     <ClInclude Include="Utilities.h" />
     <ClInclude Include="VK_Renderer.h" />
+    <ClInclude Include="WindowManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GameEngine.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Utilities.cpp" />
     <ClCompile Include="VK_Renderer.cpp" />
+    <ClCompile Include="WindowManager.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

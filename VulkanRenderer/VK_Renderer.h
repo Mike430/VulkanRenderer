@@ -27,6 +27,7 @@
 // Custom dependencies
 #include "Utilities.h"
 #include "GraphicalUtilities.h"
+#include "WindowManager.h"
 
 // namespaces
 using namespace std;
@@ -60,6 +61,7 @@ private:
 	static const string _mVkReportPrefix;
 
 	// GLFW Variables
+	WindowManager*								_mWinManager;
 	GLFWwindow*									_mWindow;
 
 	// Shared Variables
@@ -161,7 +163,6 @@ private:
 	void										CleanSwapChainResources();
 
 	// GLFW
-	void										CreateGLFWWindow();
 	VkResult									InitialiseWindowSurface();
 
 	// GLFW Event Methods
@@ -175,8 +176,6 @@ public:
 
 	VK_Renderer();
 	~VK_Renderer();
-
-	GLFWwindow*	const							GetGLFWwindow() { return _mWindow; }
 
 	VkResult									RenderScene();
 };

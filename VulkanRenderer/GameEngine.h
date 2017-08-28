@@ -25,6 +25,7 @@ using namespace GraphicalUtilities;
 class GameEngine
 {
 private:
+	WindowManager*								_mWinManager;
 	GLFWwindow*									_mWindow;
 	VK_Renderer*								_mVulkanRenderer;
 

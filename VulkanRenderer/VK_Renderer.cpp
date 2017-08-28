@@ -74,12 +74,6 @@ VK_Renderer::~VK_Renderer()
 	DestroyDebugReportCallbackEXT( _mVkInstance, _mDebugCallbackHandle, nullptr );
 	vkDestroyInstance( _mVkInstance, nullptr );
 
-
-	// Shutdown GLFW
-
-	glfwTerminate(); // window delete cannot be done before glfwTerminate as glfwTerminate cleans windows
-	glfwDestroyWindow( _mWindow ); // Can use delete because terminate alters all windows
-
 	Utilities::LogInfoIfDebug( "VK_Renderer destructor completed" );
 }
 
@@ -157,13 +151,10 @@ void VK_Renderer::DestroyDebugReportCallbackEXT( VkInstance instance,
 
 VkResult VK_Renderer::InitVulkanAndGLFW()
 {
-	if( !glfwInit() )
-	{
-		Utilities::LogErrorIfDebug( "GLFW couldn't be initialised" );
-		return VK_ERROR_EXTENSION_NOT_PRESENT;
-	}
+	_mWinManager = WindowManager::GetInstance();
+	_mWinManager->CreateNewWindow( this, VK_TRUE, _mWidth, _mHeight, VK_Renderer::OnWindowResize );
+	_mWindow = _mWinManager->GetWindow();
 
-	CreateGLFWWindow();
 	return InitVulkanRenderer();
 }
 
@@ -1151,6 +1142,38 @@ void VK_Renderer::CleanSwapChainResources()
 }
 
 // Event triggered
+void VK_Renderer::OnWindowResize( GLFWwindow* window, int width, int height )
+{
+	if( width == 0 || height == 0 ) return;
+	bool success = false;
+	VK_Renderer* tempRef = nullptr;
+
+	try
+	{
+		tempRef = reinterpret_cast< VK_Renderer* >( glfwGetWindowUserPointer( window ) );
+
+		if( window != tempRef->_mWindow )
+		{
+			Utilities::LogErrorIfDebug( "WindowManager window and local window pointer Are not the same!" );
+		}
+
+		tempRef->_mWidth = width;
+		tempRef->_mHeight = height;
+		success = !IfVKErrorPrintMSG( tempRef->BuildNewSwapChain(), "Failed to build new swap chain" );
+	}
+	catch( exception e )
+	{
+		Utilities::LogErrorIfDebug( e.what() );
+	}
+
+	if( !success )
+	{
+		delete tempRef;
+		tempRef = nullptr;
+	}
+}
+
+
 VkResult VK_Renderer::BuildNewSwapChain()
 {
 	VkResult returnResult;
@@ -1180,56 +1203,23 @@ VkResult VK_Renderer::BuildNewSwapChain()
 }
 
 
-
-// Needs to be made a part of the core game engine as the renderer shouldn't have responcibility over window and input management.
-void VK_Renderer::CreateGLFWWindow()
-{
-	// Creates a window "without a context" - Go here to find out more: http://www.glfw.org/docs/latest/context_guide.html#context_less
-	glfwWindowHint( GLFW_CLIENT_API, GLFW_NO_API );
-	_mWindow = glfwCreateWindow( _mWidth, _mHeight, "Vulkan Renderer", nullptr, nullptr );
-	glfwSetWindowUserPointer( _mWindow, this );
-	glfwSetWindowSizeCallback( _mWindow, VK_Renderer::OnWindowResize );
-
-	//glfwMakeContextCurrent( _mWindow );
-	glfwSetInputMode( _mWindow, GLFW_STICKY_KEYS, VK_TRUE );
-	glfwSetInputMode( _mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL );
-}
-
-
 VkResult VK_Renderer::InitialiseWindowSurface()
 {
 	return glfwCreateWindowSurface( _mVkInstance, _mWindow, nullptr, &_mWindowSurface );
 }
 
 
-void VK_Renderer::OnWindowResize( GLFWwindow* window, int width, int height )
-{
-	bool success = false;
-	VK_Renderer* tempRef = nullptr;
-
-	try
-	{
-		tempRef = reinterpret_cast< VK_Renderer* >( glfwGetWindowUserPointer( window ) );
-
-		tempRef->_mWidth = width;
-		tempRef->_mHeight = height;
-		success = !IfVKErrorPrintMSG( tempRef->BuildNewSwapChain(), "Failed to build new swap chain" );
-	}
-	catch( exception e )
-	{
-		Utilities::LogErrorIfDebug( e.what() );
-	}
-
-	if( !success )
-	{
-		delete tempRef;
-		tempRef = nullptr;
-	}
-}
-
-
 VkResult VK_Renderer::RenderScene()
 {
+	if( _mWindow == _mWinManager->GetWindow() )
+	{
+		Utilities::LogSuccessIfDebug( "same" );
+	}
+	else
+	{
+		cout << "Mine: " << _mWindow << " Theirs: " << _mWinManager->GetWindow() << endl;
+	}
+
 	/*
 	1: Acquire an image from the swap chain
 	2: Execute the command buffer with that image as attachment in the framebuffer
