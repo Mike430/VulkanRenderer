@@ -1211,15 +1211,6 @@ VkResult VK_Renderer::InitialiseWindowSurface()
 
 VkResult VK_Renderer::RenderScene()
 {
-	if( _mWindow == _mWinManager->GetWindow() )
-	{
-		Utilities::LogSuccessIfDebug( "same" );
-	}
-	else
-	{
-		cout << "Mine: " << _mWindow << " Theirs: " << _mWinManager->GetWindow() << endl;
-	}
-
 	/*
 	1: Acquire an image from the swap chain
 	2: Execute the command buffer with that image as attachment in the framebuffer
