@@ -6,7 +6,16 @@ GameEngine::GameEngine()
 {
 	LogInfoIfDebug( "ENGINE CORE CONSTRUCTOR CALLED" );
 
-	_mVulkanRenderer = new VK_Renderer();
+	vector<Vertex> verts =
+	{
+		{ { 0.0f, -0.5f, 0.0f },{ 1.0f, 0.0f, 0.0f } },
+		{ { 0.5f, 0.5f, 0.0f },{ 0.0f, 1.0f, 0.0f } },
+		{ { -0.5f, 0.5f, 0.0f },{ 0.0f, 0.0f, 1.0f } }
+	};
+
+	vector<uint32_t> indicies = { 1, 2, 3 };
+
+	_mVulkanRenderer = new VK_Renderer( verts );
 
 	if( _mVulkanRenderer->isCorrectlyInitialised == true )
 	{
@@ -59,8 +68,6 @@ void GameEngine::RunGameLoop()
 		RenderGame();
 		IncrementTimeDebug();
 
-		
-
 		_mLastTime = _mCurrentTime;
 	}
 }
@@ -87,7 +94,7 @@ void GameEngine::UpdateGame()
 		_mTimeDebug += "\nInput average = " + to_string( _mInputTimeSumTotal / _mInputUpdateCount ) + " seconds";
 		_mTimeDebug += "\nUpdate average = " + to_string( _mUpdateTimeSumTotal / _mGameUpdateCount ) + " seconds";
 		_mTimeDebug += "\nRender average = " + to_string( _mRenderTimeSumTotal / _mRenderUpdateCount ) + " seconds";
-		_mTimeDebug += "\nElapsed average = " + to_string( _mCumilativeTime / _mGameUpdateCount) + " seconds";
+		_mTimeDebug += "\nElapsed average = " + to_string( _mCumilativeTime / _mGameUpdateCount ) + " seconds";
 
 		LogInfoIfDebug( _mTimeDebug );
 
@@ -108,7 +115,7 @@ void GameEngine::UpdateGame()
 void GameEngine::RenderGame()
 {
 	_mRenderStartTime = HR_Clock::now();
-	_mVulkanRenderer->RenderScene();	
+	_mVulkanRenderer->RenderScene();
 	_mRenderEndTime = HR_Clock::now();
 	_mRenderDuration = _mRenderEndTime - _mRenderStartTime;
 }

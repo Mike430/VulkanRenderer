@@ -5,9 +5,11 @@
 const string VK_Renderer::_mVkReportPrefix = "Vk_Renderer Report: ";
 
 
-VK_Renderer::VK_Renderer()
+VK_Renderer::VK_Renderer( vector<Vertex> renderableMeshVerts )
 {
 	Utilities::LogInfoIfDebug( "VK_Renderer constructor called" );
+
+	_mVertices = renderableMeshVerts;
 
 	//_mWantedInstanceLayers.push_back( "VK_LAYER_LUNARG_api_dump" ); // Doesn't show errors, just shows the evolution of your vulkan app by dumping every key change that occures
 	_mWantedInstanceAndDeviceLayers.push_back( "VK_LAYER_LUNARG_core_validation" ); // Logs every error that occures
@@ -49,26 +51,12 @@ VK_Renderer::~VK_Renderer()
 	Utilities::LogInfoIfDebug( "VK_Renderer destructor called" );
 
 	// Shutdown Vulkan
-
+	CleanSwapChainResources();
+	vkDestroyBuffer( _mLogicalDevice, _mVertexBuffer, nullptr );
+	vkFreeMemory( _mLogicalDevice, _mVertexBufferMemory, nullptr );
 	vkDestroySemaphore( _mLogicalDevice, _mImageAvailableSemaphore, nullptr );
 	vkDestroySemaphore( _mLogicalDevice, _mRenderFinishedSemaphore, nullptr );
-	vkFreeCommandBuffers( _mLogicalDevice, _mCommandPool, _mCommandBuffers.size(), _mCommandBuffers.data() );
 	vkDestroyCommandPool( _mLogicalDevice, _mCommandPool, nullptr );
-	for( VkFramebuffer frameBuffer : _mSwapChainFrameBuffers )
-	{
-		vkDestroyFramebuffer( _mLogicalDevice, frameBuffer, nullptr );
-	}
-
-	vkDestroyPipeline( _mLogicalDevice, _mGraphicalPipeline, nullptr );
-	vkDestroyPipelineLayout( _mLogicalDevice, _mPipelineLayout, nullptr );
-	vkDestroyRenderPass( _mLogicalDevice, _mRenderPass, nullptr );
-
-	for( VkImageView imageView : _mSwapChainImageViews )
-	{
-		vkDestroyImageView( _mLogicalDevice, imageView, nullptr );
-	}
-
-	vkDestroySwapchainKHR( _mLogicalDevice, _mSwapChainHandle, nullptr );
 	vkDestroySurfaceKHR( _mVkInstance, _mWindowSurface, nullptr );
 	vkDestroyDevice( _mLogicalDevice, nullptr );
 	DestroyDebugReportCallbackEXT( _mVkInstance, _mDebugCallbackHandle, nullptr );
@@ -219,6 +207,11 @@ VkResult VK_Renderer::InitVulkanRenderer()
 	if( IfVKErrorPrintMSG( returnResult,
 						   "Failed to initialise command pool.",
 						   "Command pool initialised." ) )					return returnResult;
+
+	returnResult = InitVertexBuffer();
+	if( IfVKErrorPrintMSG( returnResult,
+						   "Failed to initialise vertex buffer.",
+						   "Vertex Buffer initialised." ) )					return returnResult;
 
 	returnResult = InitCommandBuffers();
 	if( IfVKErrorPrintMSG( returnResult,
@@ -396,7 +389,7 @@ VkResult VK_Renderer::InitLogicalDevice()
 
 	vector<VkDeviceQueueCreateInfo> queuesForLogicalDevice;
 
-	for( auto i = 0; i < deviceQueueIndexes.size(); i++ )
+	for( size_t i = 0; i < deviceQueueIndexes.size(); i++ )
 	{
 		VkDeviceQueueCreateInfo deviceQueueCreateInfo;
 		deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -540,7 +533,7 @@ VkResult VK_Renderer::InitImageViews()
 
 	_mSwapChainImageViews = vector<VkImageView>( _mSwapChainImages.size() );
 
-	for( int i = 0; i < _mSwapChainImages.size(); i++ )
+	for( size_t i = 0; i < _mSwapChainImages.size(); i++ )
 	{
 		VkImageViewCreateInfo createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -690,19 +683,22 @@ VkResult VK_Renderer::InitGraphicsPipeline()
 
 
 	// Creating Vertex input
-	VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {};
-	vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputStateCreateInfo.vertexBindingDescriptionCount = 0;
-	vertexInputStateCreateInfo.pVertexBindingDescriptions = nullptr;
-	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = 0;
-	vertexInputStateCreateInfo.pVertexAttributeDescriptions = nullptr;
-	// pVertexBindingDescriptions and pVertexAttributeDescriptions need to be set for dynamic vertex loading
+	// For the Vertex buffers.
+	auto bindingDescription = Vertex::getBindingDescription();
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+	VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
+	vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
+	vertexInputCreateInfo.vertexAttributeDescriptionCount = static_cast< uint32_t >( attributeDescriptions.size() );
+	vertexInputCreateInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputCreateInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	// Creating the input assembly
-	VkPipelineInputAssemblyStateCreateInfo pipelineInputAsmCreateInfo = {};
-	pipelineInputAsmCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	pipelineInputAsmCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-	pipelineInputAsmCreateInfo.primitiveRestartEnable = VK_FALSE;
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo = {};
+	inputAssemblyCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssemblyCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssemblyCreateInfo.primitiveRestartEnable = VK_FALSE;
 
 
 	// Creating the viewport and scissor region - viewing filters for the rasteriser
@@ -808,8 +804,8 @@ VkResult VK_Renderer::InitGraphicsPipeline()
 	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineCreateInfo.stageCount = 2;
 	pipelineCreateInfo.pStages = shaderStages;
-	pipelineCreateInfo.pVertexInputState = &vertexInputStateCreateInfo;
-	pipelineCreateInfo.pInputAssemblyState = &pipelineInputAsmCreateInfo;
+	pipelineCreateInfo.pVertexInputState = &vertexInputCreateInfo;
+	pipelineCreateInfo.pInputAssemblyState = &inputAssemblyCreateInfo;
 	pipelineCreateInfo.pViewportState = &viewportCreateInfo;
 	pipelineCreateInfo.pRasterizationState = &rasterizerCreateInfo;
 	pipelineCreateInfo.pMultisampleState = &multiSampleCreateInfo;
@@ -843,7 +839,7 @@ VkResult VK_Renderer::InitFrameBuffers()
 	_mSwapChainFrameBuffers = {};
 	_mSwapChainFrameBuffers.resize( _mSwapChainImages.size() );
 
-	for( int i = 0; i < _mSwapChainImageViews.size(); i++ )
+	for( size_t i = 0; i < _mSwapChainImageViews.size(); i++ )
 	{
 		VkImageView* attachedImageView = &_mSwapChainImageViews[ i ];
 
@@ -876,6 +872,49 @@ VkResult VK_Renderer::InitCommandPool()
 }
 
 
+VkResult VK_Renderer::InitVertexBuffer()
+{
+	VkResult returnResult;
+
+	VkBufferCreateInfo bufferCreateInfo = {};
+	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferCreateInfo.size = sizeof( _mVertices[ 0 ] ) * _mVertices.size();
+	bufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	returnResult = vkCreateBuffer( _mLogicalDevice, &bufferCreateInfo, nullptr, &_mVertexBuffer );
+
+	if( IfVKErrorPrintMSG( returnResult, "Cannot create buffer for verticies." ) ) return returnResult;
+
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements( _mLogicalDevice, _mVertexBuffer, &memRequirements );
+
+	auto memType = FindMemoryType( memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT );
+
+	if( memType.first == false ) return VK_ERROR_MEMORY_MAP_FAILED;
+
+	VkMemoryAllocateInfo vertexMemAllocationInfo = {};
+	vertexMemAllocationInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	vertexMemAllocationInfo.allocationSize = memRequirements.size;
+	vertexMemAllocationInfo.memoryTypeIndex = memType.second;
+
+	returnResult = vkAllocateMemory( _mLogicalDevice, &vertexMemAllocationInfo, nullptr, &_mVertexBufferMemory );
+	if( IfVKErrorPrintMSG( returnResult, "Cannot allocate memory on GPU for vertex buffer." ) ) return returnResult;
+
+	returnResult = vkBindBufferMemory( _mLogicalDevice, _mVertexBuffer, _mVertexBufferMemory, 0 ); // final param is mem offset and must be divisible by memRequirements.alignment
+	if( IfVKErrorPrintMSG( returnResult, "Could not bind buffer to GPU memory." ) ) return returnResult;
+
+	void* destination;
+	returnResult = vkMapMemory( _mLogicalDevice, _mVertexBufferMemory, 0, bufferCreateInfo.size, 0, &destination );
+	if( IfVKErrorPrintMSG( returnResult, "Could not map GPU memory for vertex buffer memcpy." ) ) return returnResult;
+	memcpy( destination, _mVertices.data(), ( size_t ) bufferCreateInfo.size );
+
+	vkUnmapMemory( _mLogicalDevice, _mVertexBufferMemory );
+
+	return returnResult;
+}
+
+
 VkResult VK_Renderer::InitCommandBuffers()
 {
 	VkResult returnResult = VK_SUCCESS;
@@ -893,7 +932,7 @@ VkResult VK_Renderer::InitCommandBuffers()
 
 	if( returnResult != VK_SUCCESS ) return returnResult;
 
-	for( int i = 0; i < _mCommandBuffers.size(); i++ )
+	for( size_t i = 0; i < _mCommandBuffers.size(); i++ )
 	{
 		VkCommandBufferBeginInfo startinUpInfo = {};
 		startinUpInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -917,7 +956,12 @@ VkResult VK_Renderer::InitCommandBuffers()
 
 		// Draw commands
 		vkCmdBindPipeline( _mCommandBuffers[ i ], VK_PIPELINE_BIND_POINT_GRAPHICS, _mGraphicalPipeline );
-		vkCmdDraw( _mCommandBuffers[ i ], 3, 1, 0, 0 );
+
+		VkBuffer vertexBuffers[] = { _mVertexBuffer };
+		VkDeviceSize offsets[] = { 0 }; // an array of buffer offsets - presumably the starting points of each object's vertex data
+		vkCmdBindVertexBuffers( _mCommandBuffers[ i ], 0, 1, vertexBuffers, offsets );
+
+		vkCmdDraw( _mCommandBuffers[ i ], static_cast< uint32_t >( _mVertices.size() ), 1, 0, 0 );
 		vkCmdEndRenderPass( _mCommandBuffers[ i ] );
 
 		returnResult = vkEndCommandBuffer( _mCommandBuffers[ i ] );
@@ -981,7 +1025,7 @@ DeviceQueueFamilyIndexes VK_Renderer::FindDeviceQueueFamilies( VkPhysicalDevice*
 	vector<VkQueueFamilyProperties> queueFamilyProps( queueFamilyCount );
 	vkGetPhysicalDeviceQueueFamilyProperties( *physicalDevice, &queueFamilyCount, queueFamilyProps.data() );
 
-	for( auto i = 0; i < queueFamilyCount; i++ )
+	for( uint32_t i = 0; i < queueFamilyCount; i++ )
 	{
 		if( queueFamilyProps.at( i ).queueCount > 0 && queueFamilyProps.at( i ).queueFlags & VK_QUEUE_GRAPHICS_BIT )
 		{
@@ -1091,8 +1135,8 @@ VkExtent2D VK_Renderer::ChooseSwapChainExtentionDimensions( VkSurfaceCapabilitie
 	{
 		VkExtent2D actualExtent = { _mWidth, _mHeight };
 
-		actualExtent.width = max( capabilities.minImageExtent.width, min( capabilities.maxImageExtent.width, actualExtent.width ) );
-		actualExtent.height = max( capabilities.minImageExtent.height, min( capabilities.maxImageExtent.height, actualExtent.height ) );
+		actualExtent.width = std::max( capabilities.minImageExtent.width, std::min( capabilities.maxImageExtent.width, actualExtent.width ) );
+		actualExtent.height = std::max( capabilities.minImageExtent.height, std::min( capabilities.maxImageExtent.height, actualExtent.height ) );
 
 		return actualExtent;
 	}
@@ -1121,11 +1165,35 @@ pair<VkResult, VkShaderModule> VK_Renderer::BuildShaderModule( const vector<char
 }
 
 
+pair<bool, uint32_t> VK_Renderer::FindMemoryType( uint32_t typeFilter, VkMemoryPropertyFlags props )
+{
+	bool success = false;
+	uint32_t result = UINT32_MAX;
+
+	VkPhysicalDeviceMemoryProperties memProperties;
+	vkGetPhysicalDeviceMemoryProperties( _mPhysicalDevice, &memProperties );
+
+	for( uint32_t i = 0; i < memProperties.memoryTypeCount; i++ )
+	{
+		// I dislike the non self documenting binary operations in this if statement
+		// This works and it's what's recommended, but I need to rewrite this when I
+		// better understand what's going on
+		if( ( typeFilter & ( 1 << i ) ) && ( memProperties.memoryTypes[ i ].propertyFlags & props ) == props )
+		{
+			success = true;
+			result = i;
+		}
+	}
+
+	return pair<bool, uint32_t>( success, result );
+}
+
+
 void VK_Renderer::CleanSwapChainResources()
 {
-	for( int i = 0; i < _mSwapChainFrameBuffers.size(); i++ )
+	for( VkFramebuffer frameBuffer : _mSwapChainFrameBuffers )
 	{
-		vkDestroyFramebuffer( _mLogicalDevice, _mSwapChainFrameBuffers[ i ], nullptr );
+		vkDestroyFramebuffer( _mLogicalDevice, frameBuffer, nullptr );
 	}
 
 	vkFreeCommandBuffers( _mLogicalDevice, _mCommandPool, _mCommandBuffers.size(), _mCommandBuffers.data() );
@@ -1133,9 +1201,9 @@ void VK_Renderer::CleanSwapChainResources()
 	vkDestroyPipelineLayout( _mLogicalDevice, _mPipelineLayout, nullptr );
 	vkDestroyRenderPass( _mLogicalDevice, _mRenderPass, nullptr );
 
-	for( int i = 0; i < _mSwapChainImageViews.size(); i++ )
+	for( VkImageView imageView : _mSwapChainImageViews )
 	{
-		vkDestroyImageView( _mLogicalDevice, _mSwapChainImageViews[ i ], nullptr );
+		vkDestroyImageView( _mLogicalDevice, imageView, nullptr );
 	}
 
 	vkDestroySwapchainKHR( _mLogicalDevice, _mSwapChainHandle, nullptr );

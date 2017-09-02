@@ -1,20 +1,7 @@
 #pragma once
 
-// SDK deprendencies
-#include "VK_Renderer.h"
-#include "GLFW/glfw3.h"
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-// C++ & System dependencies
-#include <iostream>
-#include <string>
-#include <vector>
-#include <stdio.h>
-#include <string.h>
-#include <algorithm>
-
 // Custom dependencies
+#include "VK_Renderer.h"
 #include "Utilities.h"
 #include "GraphicalUtilities.h"
 

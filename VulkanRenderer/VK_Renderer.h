@@ -13,16 +13,6 @@
 // SDK deprendencies
 #include "vulkan/vulkan.h"
 #include "GLFW/glfw3.h"
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-// C++ & System dependencies
-#include <iostream>
-#include <string>
-#include <vector>
-#include <stdio.h>
-#include <string.h>
-#include <algorithm>
 
 // Custom dependencies
 #include "Utilities.h"
@@ -57,8 +47,8 @@ struct SwapChainSupportDetails
 class VK_Renderer
 {
 private:
-	const uint8_t _mSwapChainSize = 2;
-	static const string _mVkReportPrefix;
+	vector<Vertex>								_mVertices;
+	static const string							_mVkReportPrefix;
 
 	// GLFW Variables
 	WindowManager*								_mWinManager;
@@ -79,8 +69,6 @@ private:
 	vector<const char*>							_mTurnedOnInstanceExtensions;
 	vector<const char*>							_mTurnedOnDeviceLayers;
 	vector<const char*>							_mTurnedOnDeviceExtensions;
-
-	vector<vector<vertex>>						_mVertexBufferData;
 
 	// Vulkan's core component objects
 	VkDebugReportCallbackEXT					_mDebugCallbackHandle;
@@ -106,6 +94,9 @@ private:
 	VkSurfaceFormatKHR							_mDeviceSurfaceFormats;
 	VkPresentModeKHR							_mPresentModeKHR;
 	VkSurfaceCapabilitiesKHR					_mSurfaceCapabilities;
+
+	VkBuffer									_mVertexBuffer;
+	VkDeviceMemory								_mVertexBufferMemory;
 
 	VkRenderPass								_mRenderPass;
 	VkPipelineLayout							_mPipelineLayout;
@@ -146,6 +137,7 @@ private:
 	VkResult									InitGraphicsPipeline();
 	VkResult									InitFrameBuffers();
 	VkResult									InitCommandPool();
+	VkResult									InitVertexBuffer();
 	VkResult									InitCommandBuffers();
 	VkResult									InitSemaphores();
 
@@ -160,6 +152,7 @@ private:
 	VkPresentModeKHR							ChooseSwapChainPresentationMode( vector<VkPresentModeKHR> availableModes );
 	VkExtent2D									ChooseSwapChainExtentionDimensions( VkSurfaceCapabilitiesKHR capabilities );
 	pair<VkResult, VkShaderModule>				BuildShaderModule( const vector<char>& byteCode );
+	pair<bool, uint32_t>						FindMemoryType( uint32_t typeFilter, VkMemoryPropertyFlags props );
 	void										CleanSwapChainResources();
 
 	// GLFW
@@ -174,7 +167,7 @@ private:
 public:
 	bool										isCorrectlyInitialised;
 
-	VK_Renderer();
+	VK_Renderer( vector<Vertex> verts );
 	~VK_Renderer();
 
 	VkResult									RenderScene();

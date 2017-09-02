@@ -3,10 +3,12 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <array>
 #include <stdio.h>
 #include <string.h>
 #include <fstream>
 #include <chrono>
+#include <algorithm>
 
 using namespace std;
 
